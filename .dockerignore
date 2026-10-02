@@ -1,0 +1,10 @@
+node_modules
+target
+.git
+downloads
+dist
+*.deb
+*.exe
+**/__pycache__
+**/*.swp
+**/*.swo

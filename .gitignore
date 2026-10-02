@@ -1,0 +1,32 @@
+# Build artifacts
+node_modules/
+target/
+src-tauri/target/
+www/
+dist/assets/*.js.map
+
+# Backups (no longer needed once we have git)
+backup*/
+backup_*
+*.tar.gz
+*.bak
+*.bak.*
+*.restored
+
+# Downloads / deploy artifacts
+downloads/*.deb
+downloads/*.exe
+downloads/*.tar.gz
+downloads/screenshots/
+
+# Editor & OS files
+.venv/
+__pycache__/
+*.pyc
+*.restored
+.DS_Store
+Thumbs.db
+
+# Dev tools (not part of the app)
+git-viewer.py
+layout-test/

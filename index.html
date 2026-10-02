@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>K2K Packet Desktop</title>
+<style>
+/* ============================================================
+   K2K Packet Desktop — Inline Styles
+   ============================================================
+   LIVE CSS — this <style> block is what Tauri v2 actually loads.
+   TO EDIT: make changes here, then sync to src/styles/main.css
+   (the reference copy for convenient editing).
+   ============================================================ */
+
+/* ----- Reset & CSS Variables --------------------------------
+   Universal reset: remove margins/padding, border-box sizing.
+   Design tokens in :root — dark theme inspired by GitHub Dark
+   Dimmed. Naming: --bg=page bg, --surface=panel/card bg,
+   --elevated=input/button bg, --hover=hover bg, --text=primary,
+   --text2=secondary, --muted=dimmed, --border=border color. */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --elevated: #21262d;
+  --hover: #30363d;
+  --text: #e6edf3;
+  --text2: #8b949e;
+  --muted: #6e7681;
+  --green: #3fb950;
+  --green-dim: #2ea043;
+  --green-bg: rgba(63,185,80,0.12);
+  --blue: #58a6ff;
+  --blue-bg: rgba(88,166,255,0.1);
+  --orange: #d29922;
+  --red: #f85149;
+  --red-bg: rgba(248,81,73,0.1);
+  --yellow: #d29922;
+  --border: #30363d;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace;
+  --app-font-size: 15px;  /* Matches settings.rs default (app_font_size: 15) */
+  --conn-font-size: 14px;  /* Matches settings.rs default (conn_font_size: 14) */
+  --unproto-font-size: 14px;  /* Matches settings.rs default (unproto_font_size: 14) */
+  /* Semantic colors — monitor/msg/header/retry/tag surfaces. Themes
+     override these instead of re-declaring every component rule. */
+  --monitor-bg: #000;
+  --monitor-text: #33ff33;
+  --msg-rx: #00cccc;
+  --msg-tx: #cc6666;
+  --msg-sys: #006600;
+  --msg-call: #00cccc;
+  --msg-raw-call: #006666;
+  --msg-raw-decoded: #33ff33;
+  --msg-raw-sent: #cc6666;
+  --msg-raw-hex: #006666;
+  --u-call: #33ff33;
+  --u-time: #e6d080;
+  --u-via: #008888;
+  --u-meta: #008888;
+  --u-payload: #00cccc;
+  --u-payload-sent: #cc6666;
+  --u-hover-bg: #0a0a0a;
+  --retry-bg: #001a00;
+  --retry-border: #003300;
+  --retry-bar-text: #00cc00;
+  --retry-label: #008888;
+  --retry-text: #33ff33;
+  --retry-count: #00ff00;
+  --retry-timer: #00cccc;
+  --retry-indicator: #006600;
+  --u-tag-text: #006600;
+  --u-tag-border: #003300;
+  --tag-ok: #00cc00;
+  --tag-soft: #33ff33;
+  --tag-bad: #ff3333;
+  --tag-raw: #ff3333;
+}
+
+/* Light theme — standard professional app look */
+[data-theme="light"] {
+  --bg: #d4d4d4;
+  --surface: #e8e8e8;
+  --elevated: #c8c8c8;
+  --hover: #c0c0c0;
+  --text: #0f0f0f;
+  --text2: #3a3a3a;
+  --muted: #666666;
+  --border: #b0b0b0;
+  --green: #2ea043;
+  --green-dim: #1e7e34;
+  --green-bg: rgba(46,160,67,0.10);
+  --blue: #1a73e8;
+  --blue-bg: rgba(26,115,232,0.08);
+  --orange: #c96a00;
+  --red: #d93025;
+  --red-bg: rgba(217,48,37,0.08);
+  --yellow: #b8860b;
+  /* Semantic colors */
+  --monitor-bg: #ffffff;
+  --monitor-text: #1a1a1a;
+  --msg-rx: #006d8f;
+  --msg-tx: #a05050;
+  --msg-sys: #2e7d32;
+  --msg-call: #1a73e8;
+  --msg-raw-call: #555;
+  --msg-raw-decoded: #006d8f;
+  --msg-raw-sent: #a05050;
+  --msg-raw-hex: #999;
+  --u-call: #1a73e8;
+  --u-time: #8b6914;
+  --u-via: #006d8f;
+  --u-meta: #006d8f;
+  --u-payload: #006d8f;
+  --u-payload-sent: #a05050;
+  --u-hover-bg: #f5f5f5;
+  --retry-bg: #f7f7f7;
+  --retry-border: #ddd;
+  --retry-bar-text: #333;
+  --retry-label: #888;
+  --retry-text: #333;
+  --retry-count: #1a73e8;
+  --retry-timer: #006d8f;
+  --retry-indicator: #999;
+  --u-tag-text: #999;
+  --u-tag-border: #ccc;
+  --tag-ok: #2ea043;
+  --tag-soft: #2ea043;
+  --tag-bad: #d93025;
+}
+[data-theme="light"] .sr input,[data-theme="light"] .sr select,[data-theme="light"] .sr textarea { background: #ffffff !important; }
+[data-theme="light"] .cs-selected { background: #ffffff; }
+[data-theme="light"] .cs-options { background: #ffffff; }
+[data-theme="light"] .sr select option { background: #ffffff; color: #111111; }
+[data-theme="light"] .theme-select { background: #ffffff; }
+[data-theme="light"] #set-app-fontsize { background: #ffffff; }
+
+/* Full-viewport dark background, body scroll disabled. */
+
+[data-theme="blue"] {
+  --bg: #0a1428;
+  --surface: #0f1d38;
+  --elevated: #162648;
+  --hover: #1c2f55;
+  --text: #c8d8f0;
+  --text2: #6890c8;
+  --muted: #4870a8;
+  --border: #1e3460;
+  --green: #40c8c8;
+  --green-dim: #30b0b0;
+  --green-bg: rgba(64,200,200,0.12);
+  --blue: #70b8ff;
+  --blue-bg: rgba(112,184,255,0.1);
+  --orange: #d0a040;
+  --red: #e06c6c;
+  --red-bg: rgba(224,108,108,0.1);
+  --yellow: #d0a040;
+  /* Semantic colors */
+  --monitor-bg: #070e1c;
+  --monitor-text: #b0c4e0;
+  --msg-rx: #80c8e8;
+  --msg-tx: #c8a890;
+  --msg-sys: #70c0a0;
+  --msg-call: #60a0d0;
+  --msg-raw-call: #5080a8;
+  --msg-raw-decoded: #70c0a0;
+  --msg-raw-sent: #c8a890;
+  --msg-raw-hex: #406890;
+  --u-call: #80c8e8;
+  --u-time: #c8b880;
+  --u-via: #50a0b0;
+  --u-meta: #50a0b0;
+  --u-payload: #b0c8e0;
+  --u-payload-sent: #c8a890;
+  --u-hover-bg: #0d1a30;
+  --retry-bg: #0a1428;
+  --retry-border: #162648;
+  --retry-label: #4870a8;
+  --retry-text: #c8d8f0;
+  --retry-count: #70b8ff;
+  --retry-timer: #80c8e8;
+  --retry-indicator: #4870a8;
+  --u-tag-text: #4870a8;
+  --u-tag-border: #1e3460;
+  --tag-ok: #40c8c8;
+  --tag-soft: #40c8c8;
+  --tag-bad: #e06c6c;
+}
+
+/* Full-viewport dark background, body scroll disabled. */
+[data-theme="sepia"] {
+  --bg: #1e1a14;
+  --surface: #262218;
+  --elevated: #2e2a1e;
+  --hover: #363226;
+  --text: #e0d0b0;
+  --text2: #b0a080;
+  --muted: #8a7a60;
+  --border: #3a3426;
+  --green: #b8a060;
+  --green-dim: #a08848;
+  --green-bg: rgba(184,160,96,0.12);
+  --blue: #c0a880;
+  --blue-bg: rgba(192,168,128,0.1);
+  --orange: #c89848;
+  --red: #d08060;
+  --red-bg: rgba(208,128,96,0.1);
+  --yellow: #c89848;
+  /* Semantic colors */
+  --tag-raw: #d49050;
+  --monitor-bg: #0f0d09;
+  --monitor-text: #c8b890;
+  --msg-rx: #d4b060;
+  --msg-tx: #b09070;
+  --msg-sys: #a09050;
+  --msg-call: #b09850;
+  --msg-raw-call: #887050;
+  --msg-raw-decoded: #c8a850;
+  --msg-raw-sent: #b09070;
+  --msg-raw-hex: #706040;
+  --u-call: #d4b060;
+  --u-time: #b09850;
+  --u-via: #8a7a50;
+  --u-meta: #8a7a50;
+  --u-payload: #c8b890;
+  --u-payload-sent: #b09070;
+  --u-hover-bg: #14110c;
+  --retry-bg: #1a1610;
+  --retry-border: #2a2418;
+  --retry-label: #8a7a60;
+  --retry-text: #e0d0b0;
+  --retry-count: #c8a850;
+  --retry-timer: #d4b060;
+  --retry-indicator: #706040;
+  --u-tag-text: #706040;
+  --u-tag-border: #3a3426;
+  --tag-ok: #b8a060;
+  --tag-soft: #b8a060;
+  --tag-bad: #d08060;
+}
+
+/* ── Synthwave — deep purple with neon pink/cyan accents ── */
+[data-theme="synthwave"] {
+  --bg: #120a1a;
+  --surface: #1a1028;
+  --elevated: #221a30;
+  --hover: #2a2238;
+  --text: #e0d0f0;
+  --text2: #a090c0;
+  --muted: #8070a0;
+  --border: #322845;
+  --green: #40e0a0;
+  --green-dim: #30c088;
+  --green-bg: rgba(64,224,160,0.12);
+  --blue: #60a0ff;
+  --blue-bg: rgba(96,160,255,0.10);
+  --orange: #ff8040;
+  --red: #ff4080;
+  --red-bg: rgba(255,64,128,0.12);
+  --yellow: #ffcc40;
+  /* Semantic colors */
+  --monitor-bg: #0d0614;
+  --monitor-text: #e0d0f0;
+  --msg-rx: #40e0a0;
+  --msg-tx: #ff6bb5;
+  --msg-sys: #a080ff;
+  --msg-call: #60a0ff;
+  --msg-raw-call: #60a0ff;
+  --msg-raw-decoded: #40e0a0;
+  --msg-raw-sent: #ff6bb5;
+  --msg-raw-hex: #604080;
+  --u-call: #60a0ff;
+  --u-time: #c080ff;
+  --u-via: #40e0a0;
+  --u-meta: #40e0a0;
+  --u-payload: #40e0a0;
+  --u-payload-sent: #ff6bb5;
+  --u-hover-bg: #221a30;
+  --retry-bg: #1a1028;
+  --retry-border: #322845;
+  --retry-label: #8070a0;
+  --retry-text: #e0d0f0;
+  --retry-count: #60a0ff;
+  --retry-timer: #40e0a0;
+  --retry-indicator: #604080;
+  --u-tag-text: #604080;
+  --u-tag-border: #322845;
+  --tag-ok: #40e0a0;
+  --tag-soft: #40e0a0;
+  --tag-bad: #ff4080;
+  --tag-raw: #ff4080;
+}
+[data-theme="light"] #unproto-to,
+[data-theme="light"] #unproto-via,
+[data-theme="light"] #via-input,
+[data-theme="light"] #compose-in,
+[data-theme="light"] #unproto-msg { background: #ffffff; color: #111111; }
+
+/* Slide-up suggestion panel — appears above the input field */
+.sug-wrap { position: relative; flex:1; min-width:0; display:flex; flex-direction:column; }
+.sug-wrap>input,.sug-wrap>textarea { width:100%; }
+.sug-panel { display:none; position:absolute; bottom:100%; left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:6px; z-index:500; max-height:200px; overflow-y:auto; margin-bottom:4px; box-shadow:0 -4px 16px rgba(0,0,0,0.3); animation:sugSlide .15s ease-out }
+@keyframes sugSlide { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+.sug-panel.open { display:block }
+.sug-item { display:flex; align-items:center; gap:8px; padding:5px 10px; cursor:pointer; font-size:var(--unproto-font-size); font-family:var(--mono); color:var(--text); transition:background .1s }
+.sug-item:hover { background:var(--hover); color:var(--green); }
+.sug-val { flex:1; min-width:0; }
+.sug-del { display:inline-flex; align-items:center; cursor:pointer; opacity:.95; flex-shrink:0; padding:0 6px; line-height:1; transition:opacity .1s, transform .1s; }
+.sug-del:hover { opacity:1; transform:scale(1.1); }
+.sug-del img { display:block; }
+[data-theme="vintage"] {
+  --bg: #0a0e0a;
+  --surface: #0f140f;
+  --elevated: #141c14;
+  --hover: #1a241a;
+  --text: #33ff33;
+  --text2: #1a9a1a;
+  --muted: #107010;
+  --border: #1c2a1c;
+  --green: #40ff40;
+  --green-dim: #22cc22;
+  --green-bg: rgba(51,255,51,0.08);
+  --blue: #33ff88;
+  --blue-bg: rgba(51,255,136,0.08);
+  --orange: #99ff33;
+  --red: #ff5533;
+  --red-bg: rgba(255,85,51,0.10);
+  --yellow: #ccff33;
+  /* Semantic colors */
+  --monitor-bg: #050805;
+  --monitor-text: #33ff33;
+  --msg-rx: #33ff33;
+  --msg-tx: #66ff66;
+  --msg-sys: #1acc1a;
+  --msg-call: #1acc88;
+  --msg-raw-call: #1a881a;
+  --msg-raw-decoded: #33ff33;
+  --msg-raw-sent: #66ff66;
+  --msg-raw-hex: #1a6a1a;
+  --u-call: #33ff88;
+  --u-time: #99ff33;
+  --u-via: #1acc33;
+  --u-meta: #1acc33;
+  --u-payload: #33ff33;
+  --u-payload-sent: #66ff66;
+  --u-hover-bg: #0d140d;
+  --retry-bg: #0a0e0a;
+  --retry-border: #141c14;
+  --retry-label: #107010;
+  --retry-text: #33ff33;
+  --retry-count: #33ff88;
+  --retry-timer: #33ff33;
+  --retry-indicator: #1a6a1a;
+  --u-tag-text: #1a6a1a;
+  --u-tag-border: #1c2a1c;
+  --tag-ok: #33ff33;
+  --tag-soft: #33ff33;
+  --tag-bad: #ff5533;
+  --tag-raw: #99ff33;
+}
+
+/* Full-viewport dark background, body scroll disabled. */
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-size: var(--app-font-size); font-family: var(--font); user-select: none; }
+
+/* App root — vertical column, fills viewport. */
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ----- Top Bar (Connection Controls) ------------------------ */
+/* 3-column grid: [left: logo+conn] [center: BEACON/PBBS center] [right: buttons].
+   The equal 1fr side columns center the middle badge absolutely in the window. */
+#topbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; padding: 4px 10px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; position: relative; }
+#topbar .app-logo { width: 28px; height: 28px; border-radius: 4px; flex-shrink: 0; }
+#topbar-left { display:flex; align-items:center; gap:6px; justify-self:start; min-width:0; }
+/* Connection address + button, stacked so button sits under the IP:port.
+   Kept smaller than the theme font so the top bar stays short. */
+#conn-area { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; flex-shrink: 1; min-width: 0; }
+#addr-line { display: flex; align-items: center; gap: 2px; line-height: 1; flex-wrap: nowrap; justify-content: flex-start; min-width: 0; position: relative; }
+/* Connection status circle — green when connected (button shows Disconnect),
+   red otherwise. Sized to about the small address font. */
+#conn-dot { width: 0.8em; height: 0.8em; border-radius: 50%; display: inline-block; flex-shrink: 0; background: var(--red); box-shadow: 0 0 4px var(--red); }
+#conn-area:has(#connect-btn.disconnect) #conn-dot { background: var(--green); box-shadow: 0 0 4px var(--green); }
+#topbar input { background: transparent; border: none; border-radius: 0; color: var(--text); padding: 0; font-size: 11px; outline: none; transition: border-color .2s; }
+#topbar input:focus { border-color: var(--green); }
+#topbar input:disabled{opacity:.5;cursor:not-allowed}
+#host{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;font-weight:600}
+#port{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;font-weight:600}
+#addr-text{font-size:11px;font-weight:600;color:var(--text);white-space:nowrap}
+/* Hide number spinner on port inputs — user types the port directly */
+#port::-webkit-inner-spin-button,
+#port::-webkit-outer-spin-button,
+#set-port::-webkit-inner-spin-button,
+#set-port::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+#port[type=number],
+#set-port[type=number] { -moz-appearance: textfield; }
+/* Connect button — green for connect, red for disconnect. */
+#connect-btn{background:var(--green);color:#000;border:none;border-radius:4px;padding:2px 12px;font-weight:600;font-size:11px;cursor:pointer;line-height:1.3;width:100%}
+#fullscreen-btn{background:none;border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:2px 7px;font-size:12px;cursor:pointer;margin-left:1px;line-height:1.2}
+#fullscreen-btn:hover{color:var(--text);border-color:var(--text2)}
+#connect-btn:hover{background:var(--green-dim)}
+#connect-btn.disconnect{background:var(--red)}
+#connect-btn.disconnect:hover{background:#da3633}
+
+/* Connection status badge — hidden (the green/red dot + text are removed from view).
+   The element stays in the DOM because the bundle's status setter writes to it. */
+#conn-status{display:none}
+#conn-status .dot{display:none}
+/* Settings gear button. */
+.settings-btn{background:none;border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:2px 7px;font-size:12px;cursor:pointer;margin-left:1px;line-height:1.2}
+.settings-btn:hover{color:var(--text);border-color:var(--text2)}
+
+/* Theme select dropdown in settings. */
+.theme-select{background:var(--elevated);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:inherit;outline:none;cursor:pointer}
+
+/* ----- Main Split Layout (Left Panel | Divider | Unproto) --- */
+#main{display:flex;flex:1;overflow:hidden;position:relative}
+/* Left panel: connected-mode terminal (tabs, messages, compose). */
+#left-panel{display:flex;flex-direction:column;background:var(--surface);overflow:hidden;min-width:250px;width:50%}
+/* Vertical drag divider between left and right panels. */
+#divider{width:4px;cursor:col-resize;background:var(--border);flex-shrink:0;position:relative;z-index:10}
+#divider:hover,#divider.active{background:var(--green)}
+
+/* ----- Mode Tabs (C1 / C2 / C3 / C4) ------------------------ */
+#mode-tabs{display:flex;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0}
+#left-clear{color:var(--text2);font-size:var(--conn-font-size);font-weight:600;cursor:pointer;padding:2px 5px;margin-left:auto;margin-right:12px;flex-shrink:0;border:1px solid var(--border);border-radius:4px;background:var(--elevated);transition:all .15s;align-self:center}
+#left-clear:hover{color:var(--text)}
+#u-clear:hover{color:var(--text)!important}
+.mode-tab{padding:7px 0;flex:1;text-align:center;font-size:var(--conn-font-size);font-weight:600;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;transition:all .15s;letter-spacing:.5px;position:relative}
+.mode-tab:hover{color:var(--text);background:var(--hover)}
+.mode-tab.active{color:var(--green);border-bottom-color:var(--green);background:var(--green-bg)}
+/* Status dot inside each tab (green=connected, yellow=connecting, gray=disconnected). */
+.mode-tab .conn-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.mode-tab .conn-dot.green{background:var(--green)}
+.mode-tab .conn-dot.yellow{background:var(--yellow)}
+.mode-tab .conn-dot.gray{background:var(--muted)}
+.mode-tab .remote-label{font-size:calc(var(--conn-font-size) - 2px);color:var(--text2);display:inline;font-weight:400}
+
+/* ----- Tab Content (Messages + Compose) --------------------- */
+#tab-content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* Message log — monospace, black background, scrollable. */
+#left-msgs{flex:1;overflow-y:auto;padding:4px 0;display:flex;flex-direction:column;font-family:var(--mono);background:var(--monitor-bg);user-select:text;-webkit-user-select:text}
+.left-msg{padding:2px 12px;font-size:var(--conn-font-size);line-height:1.5;word-wrap:break-word;max-width:100%}
+.left-msg.rx{color:var(--msg-rx)}
+.left-msg.tx{color:var(--msg-tx)}
+.left-msg.sys{color:var(--msg-sys);font-size:var(--conn-font-size)}
+.left-msg .t{font-size:calc(var(--conn-font-size) - 2px);color:var(--msg-call);white-space:nowrap;flex-shrink:0;min-width:60px;text-align:right}
+.left-msg .msg{flex:1}
+.left-msg.raw{color:#00cccc;padding:2px 12px;font-size:var(--conn-font-size);line-height:1.5;word-wrap:break-word;font-family:var(--mono)}
+.left-msg.raw .t{font-size:calc(var(--conn-font-size) - 3px);color:var(--msg-raw-call);white-space:nowrap;flex-shrink:0;min-width:54px;text-align:right}
+.left-msg.raw .decoded{color:var(--msg-raw-decoded);font-size:var(--conn-font-size);margin-bottom:1px}
+.left-msg.raw .hex{color:var(--msg-raw-hex);font-size:calc(var(--conn-font-size) - 2px);word-break:break-all}
+.left-msg.raw.sent .decoded{color:var(--msg-raw-sent)}
+
+/* ----- Via Field + Compose (Connected Mode) ----------------- */
+#via-area{display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0}
+#via-area label{font-size:var(--conn-font-size);color:var(--text2);font-weight:600;white-space:nowrap}
+#via-input{flex:1;background:var(--elevated);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:var(--conn-font-size);outline:none;font-family:var(--mono);text-transform:uppercase}
+#via-input:focus{border-color:var(--blue)}
+/* Message compose row (textarea + send button). */
+#compose{display:flex;align-items:flex-end;gap:6px;padding:4px 10px 8px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0}
+#compose-in{flex:1;background:var(--elevated);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-size:var(--conn-font-size);font-family:var(--mono);resize:none;outline:none;min-height:32px}
+#compose-in:focus{border-color:var(--green)}
+/* Send button — disabled state + hover on enabled. */
+#send-btn{background:var(--green);color:#000;border:none;border-radius:6px;padding:8px 16px;font-weight:600;font-size:var(--conn-font-size);cursor:pointer;white-space:nowrap}
+#send-btn:disabled{opacity:.4;cursor:default}
+#send-btn:not(:disabled):hover{background:var(--green-dim)}
+
+/* ----- Unproto (Monitor / Right Panel) ---------------------- */
+#unproto{flex:1;display:flex;flex-direction:column;background:var(--surface);overflow:hidden;min-width:300px}
+#unproto-header{display:flex;align-items:center;justify-content:space-between;padding:5px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+#unproto-header span{font-size:var(--unproto-font-size);font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+#unproto-header .u-count{color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:var(--unproto-font-size)}
+/* Toggle buttons in unproto header — text-style, green when active. */
+.u-header-toggles{display:flex;align-items:center;gap:6px}
+.u-toggle-btn{background:none;border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:2px 8px;font-size:var(--unproto-font-size);cursor:pointer;white-space:nowrap;transition:all .15s}
+.u-toggle-btn:hover{border-color:var(--text2);color:var(--text)}
+.u-toggle-btn.active{background:var(--green-bg);border-color:var(--green);color:var(--green)}
+/* Scrollable decoded frame log — green-on-black terminal look. */
+#unproto-data{flex:1;overflow:auto;padding:2px 0;font-family:var(--mono);font-size:var(--unproto-font-size);background:var(--monitor-bg);color:var(--monitor-text);user-select:text;-webkit-user-select:text}
+/* Each unproto entry wrapper. */
+.u-entry{padding:1px 0;transition:background .15s;background:transparent;line-height:1.4}
+.u-entry:hover{background:var(--u-hover-bg)}
+/* Header line — coloured spans for time/src/dest/via/meta. */
+.u-header{color:var(--u-call);padding:0 12px;white-space:pre;font-size:var(--unproto-font-size);line-height:1.5}
+.u-header .h-time{color:var(--u-time)}
+.u-header .h-src{color:var(--u-call);font-weight:700}
+.u-header .h-to{color:var(--u-call)}
+.u-header .h-dst{color:var(--u-call);font-weight:700}
+.u-header .h-via{color:var(--u-via)}
+.u-header .h-meta{color:var(--u-meta)}
+
+/* Payload continuation lines — no wrap, horizontal scroll for long lines. */
+.u-payload{color:var(--u-payload);padding:0 12px;white-space:pre;font-size:var(--unproto-font-size);line-height:1.5}
+.u-payload.sent{color:var(--u-payload-sent)}
+/* RETRY STATUS BAR */
+#retry-bar{display:none;padding:2px 12px;background:var(--retry-bg);border-top:1px solid var(--retry-border);font-size:var(--conn-font-size);font-family:var(--mono);color:var(--retry-bar-text);flex-shrink:0;align-items:center;gap:8px}
+#retry-bar.visible{display:flex}
+#retry-bar .r-label{color:var(--retry-label)}
+#retry-bar .r-text{color:var(--retry-text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#retry-bar .r-count{color:var(--retry-count);font-weight:700}
+#retry-bar .r-timer{color:var(--retry-timer);font-family:var(--mono);min-width:40px;text-align:right}
+/* Retry countdown colour escalation: 1st=green, 2nd=yellow, 3rd=orange. */
+#retry-bar.retry-1 .r-count{color:#33ff33}
+#retry-bar.retry-2 .r-count{color:#cccc00}
+#retry-bar.retry-3 .r-count{color:#ff6600}
+/* Inline retry indicator inside message area (simpler, less obtrusive). */
+.retry-indicator{display:none;color:var(--retry-indicator);font-size:calc(var(--conn-font-size) - 3px);padding:0 12px 2px}
+.retry-indicator.show{display:block}
+.u-tag{font-size:calc(var(--unproto-font-size) - 2px);color:var(--u-tag-text);margin-left:4px;padding:0 4px;border:1px solid var(--u-tag-border);flex-shrink:0}
+.u-tag.sabm{color:var(--tag-ok);border-color:var(--tag-ok)}
+.u-tag.ua{color:var(--tag-soft);border-color:var(--tag-soft)}
+.u-tag.disc{color:var(--tag-bad);border-color:var(--tag-bad)}
+.u-tag.ui{color:var(--tag-soft);border-color:var(--u-tag-border)}
+.u-tag.i{color:var(--tag-ok);border-color:var(--u-tag-border)}
+.u-tag.raw{color:var(--tag-raw);border-color:var(--tag-raw)}
+
+/* ----- Unproto Compose (Send UI Frames) ---------------------- */
+/* NOTE: .u-toggle-btn and .u-header-toggles are defined above in the
+   "Unproto (Monitor)" section — the duplicate block that was here has been
+   removed. The earlier definition (gap:6px, padding:2px 8px, color:var(--text2))
+   now applies to all toggle buttons in both the header and the compose area. */
+/* To + Via side by side on one row — To 1/3, Via 2/3 (matches #via-area on connected mode) */
+#unproto-via-row{display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0}
+#unproto-to-area{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+#unproto-via-area{display:flex;align-items:center;gap:6px;flex:2;min-width:0}
+#unproto-to-area label,#unproto-via-area label{font-size:var(--unproto-font-size);color:var(--text2);font-weight:600;white-space:nowrap}
+#unproto-to,#unproto-via{flex:1;background:var(--elevated);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:var(--unproto-font-size);outline:none;font-family:var(--mono);text-transform:uppercase;min-width:0}
+#unproto-to:focus,#unproto-via:focus{border-color:var(--blue)}
+#unproto-status{font-size:var(--unproto-font-size);color:var(--muted);padding:0 2px;flex-shrink:0}
+/* Send row (matches #compose on connected mode) */
+#unproto-send-row{display:flex;align-items:flex-end;gap:6px;padding:4px 10px 8px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0}
+#unproto-msg{flex:1;background:var(--elevated);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-size:var(--unproto-font-size);font-family:var(--mono);resize:none;outline:none;min-height:32px}
+#unproto-msg:focus{border-color:var(--green)}
+#unproto-send{background:var(--blue);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-weight:600;font-size:var(--unproto-font-size);cursor:pointer;white-space:nowrap}
+#unproto-send:disabled{opacity:.4;cursor:default}
+#unproto-send:not(:disabled):hover{background:#1f6feb}
+
+/* ----- Settings Modal --------------------------------------- */
+/* ----- Modal overlays --------------------------------------- */
+/* One shared .overlay class — every modal toggles .open to show.
+   beacon-warning overrides the dim level and z-index so it sits
+   above the settings dialog. */
+.overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+#beacon-warning.overlay{background:rgba(0,0,0,0.7);z-index:200}
+#mb-warning.overlay{background:rgba(0,0,0,0.7);z-index:200}
+#log-dialog{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:960px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+/* BEACON / PBBS indicators — centered grid column (sits exactly in the middle). */
+#badge-row{display:flex;gap:6px;align-items:center;justify-content:center;white-space:nowrap;justify-self:center;max-width:100%}
+#topbar-right { display:flex; align-items:center; gap:3px; justify-self:end; }
+#beacon-indicator{font-size:11px;color:var(--green);border:1px solid var(--green);border-radius:3px;padding:2px 7px;font-weight:600;opacity:0.7;white-space:nowrap;cursor:pointer}
+#beacon-indicator:hover{opacity:1}
+#beacon-indicator.hidden{display:none}
+#pbbs-indicator{font-size:11px;color:var(--green);border:1px solid var(--green);border-radius:3px;padding:2px 7px;font-weight:600;opacity:0.7;white-space:nowrap;cursor:pointer}
+#pbbs-indicator:hover{opacity:1}
+#pbbs-indicator.hidden{display:none}
+#pbbs-dialog{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:720px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.4);padding:16px 20px;box-sizing:border-box}
+#pbbs-dialog h2{margin:0 0 10px;font-size:inherit;font-weight:600;display:flex;align-items:center;justify-content:space-between}
+#pbbs-dialog h2 .close-s{border:none;color:var(--text2);font-size:20px;cursor:pointer;padding:0 4px;background:none}
+#pbbs-console{flex:1;min-height:320px;max-height:52vh;overflow-y:auto;background:var(--elevated);border:1px solid var(--border);border-radius:6px;color:var(--green);padding:10px;font-size:13px;outline:none;font-family:var(--mono);white-space:pre-wrap;line-height:1.45;text-align:left;box-sizing:border-box}
+#pbbs-input-row{display:flex;gap:8px;margin-top:10px}
+#pbbs-input{flex:1;background:var(--elevated);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-family:var(--mono);font-size:13px;outline:none;box-sizing:border-box}
+#pbbs-input:focus{border-color:var(--green)}
+#pbbs-send{background:var(--green);color:#000;border:none;border-radius:6px;padding:8px 16px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
+#pbbs-send:hover{background:var(--green-dim)}
+#settings-dialog{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:690px;max-height:95vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+#settings-dialog h2{padding:16px 20px 12px;font-size:inherit;font-weight:600;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#settings-dialog h2 .close-s{border:none;color:var(--text2);font-size:20px;cursor:pointer;padding:0 4px;background:none}
+#settings-scroll{overflow-y:auto;padding:0 20px;flex:1}
+.sa{display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0}
+.s-body{padding:12px 20px 16px}
+.sg{margin-bottom:14px}
+.sg h3{font-size:inherit;color:#4682B4;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;font-weight:600;padding-bottom:6px;border-bottom:1px solid var(--border);width:80%}
+/* Settings row — label on left, input on right. */
+.sr{display:flex;align-items:center;justify-content:space-between;padding:5px 0}
+.sr label{font-size:inherit;color:var(--text)}
+.sr input,.sr select{background:var(--elevated);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:inherit;outline:none;width:180px}
+.sr select{-webkit-appearance:none;-moz-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b949e'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;cursor:pointer}
+.sr select option{background:var(--elevated);color:var(--text)}
+.sr input:focus,.sr select:focus{border-color:var(--green)}
+.sr input[type=checkbox]{width:16px;height:16px;accent-color:var(--green);cursor:pointer;text-align:left}
+/* Custom protocol dropdown — needed because <option> elements can't have partial color styling */
+.cs-wrapper{position:relative;width:240px}
+.cs-selected{background:var(--elevated);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:inherit;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;transition:border-color .2s}
+.cs-selected:hover,.cs-selected.open{border-color:var(--green)}
+.cs-arrow{font-size:8px;color:var(--text2);transition:transform .15s}
+.cs-selected.open .cs-arrow{transform:rotate(180deg)}
+.cs-options{display:none;position:absolute;top:100%;left:0;right:0;background:var(--elevated);border:1px solid var(--border);border-radius:4px;z-index:200;margin-top:2px;overflow:hidden}
+.cs-options.open{display:block}
+.cs-opt{padding:6px 8px;cursor:pointer;color:var(--text);font-size:inherit;transition:background .1s}
+.cs-opt:hover{background:var(--hover)}
+.cs-opt .beta{color:#ff4444;font-weight:700;font-size:calc(100% - 2px);margin-right:4px;text-transform:uppercase}
+.sr input[type=number]{width:80px}
+.sa button{background:var(--elevated);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 16px;font-size:inherit;cursor:pointer}
+.sa button:hover{background:var(--hover)}
+.sa button.primary{background:var(--green);color:#000;border-color:var(--green);font-weight:600}
+.sr button{background:var(--elevated);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:inherit;outline:none;width:180px;cursor:pointer}
+.sr button:hover{background:var(--hover);border-color:var(--green)}
+/* ----- Unproto Font Colors Modal ----------------------------- */
+#fontcolors-overlay.overlay{background:rgba(0,0,0,0.7);z-index:300}
+#fontcolors-dialog{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:640px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+#fontcolors-dialog h2{padding:16px 20px 12px;font-size:inherit;font-weight:600;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#fontcolors-dialog h2 .close-s{border:none;color:var(--text2);font-size:20px;cursor:pointer;padding:0 4px;background:none}
+#fontcolors-scroll{overflow-y:auto;padding:0 20px;flex:1}
+.fc-sample{background:#000;border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin:14px 0;font-family:var(--mono);font-size:var(--unproto-font-size);line-height:1.5;overflow-x:auto}
+.fc-sample .fc-hdr{white-space:nowrap}
+.fc-conn{margin-top:8px;padding-top:8px;border-top:1px solid #30363d}
+.fc-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+.fc-row:last-child{border-bottom:none}
+.fc-row label{flex:1;font-size:inherit;color:var(--text)}
+.fc-hex{font-family:var(--mono);font-size:calc(var(--app-font-size) - 2px);color:var(--text);width:76px;text-align:center;background:var(--elevated);border:1px solid var(--border);border-radius:4px;padding:2px 4px;outline:none;flex-shrink:0}
+.fc-hex:focus{border-color:var(--green)}
+.fc-hex.bad{border-color:var(--red);color:var(--red)}
+.fc-swatch{width:18px;height:18px;border-radius:4px;border:1px solid var(--border);flex-shrink:0}
+.fc-row input[type=color]{width:46px;height:26px;padding:0;border:1px solid var(--border);border-radius:4px;background:var(--elevated);cursor:pointer;flex-shrink:0}
+.fc-row input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+.fc-row input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
+.fc-reset{background:none;border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:inherit;flex-shrink:0}
+.fc-reset:hover{color:var(--text);background:var(--hover)}
+.fc-note{color:var(--muted);font-size:calc(var(--app-font-size) - 3px);padding:2px 0 10px}
+/* ----- Help Modal ------------------------------------------- */
+#beacon-dialog{background:var(--surface);border:2px solid var(--yellow);border-radius:12px;width:420px;padding:30px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+#beacon-dialog h2{margin:0 0 12px;font-size:18px;font-weight:700;color:var(--yellow);}
+#help-dialog{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:540px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+#help-dialog h2{padding:16px 20px 12px;font-size:inherit;font-weight:600;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+#help-dialog h2 .close-s{border:none;color:var(--text2);font-size:20px;cursor:pointer;padding:0 4px;background:none}
+.h-body{padding:12px 20px 16px;color:var(--text);font-size:inherit;line-height:1.5}
+.h-body h3{font-size:inherit;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;font-weight:700}
+.h-body h3:first-child{margin-top:0}
+.h-body p{margin:4px 0 8px}
+.h-body code{background:var(--elevated);padding:1px 6px;border-radius:3px;font-size:inherit;color:var(--blue);font-family:var(--mono)}
+.h-body .cmd{display:block;background:var(--elevated);padding:6px 10px;border-radius:4px;margin:4px 0;font-family:var(--mono);font-size:inherit;color:var(--text);border-left:3px solid var(--green)}
+.h-body .key{background:var(--elevated);border:1px solid var(--border);padding:1px 6px;border-radius:3px;font-size:inherit;color:var(--text2);margin:0 2px}
+.h-body hr{border:none;border-top:1px solid var(--border);margin:12px 0}
+/* ----- Custom Scrollbar (WebKit) ---------------------------- */
+::-webkit-scrollbar{width:6px!important;height:6px!important}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:var(--text2)}
+/* Horizontal scrollbar thumb */
+::-webkit-scrollbar-corner{background:transparent}
+</style>
+<script>
+// ── BROWSER PREVIEW SHIM (dev only — inert inside Tauri) ──────────
+// Lets the frontend run in a plain browser (dev server / preview page)
+// without the Tauri runtime: settings read/write go to localStorage.
+// Inside Tauri, window.__TAURI_INTERNALS__ already exists → skipped.
+if(!window.__TAURI_INTERNALS__){
+  var _ls=window.localStorage,_key="k2k-preview-settings";
+  function _previewSettings(){
+    try{var v=JSON.parse(_ls.getItem(_key));if(v&&typeof v==="object")return v}catch(e){}
+    return {protocol:"AGWPE",callsign:"",host:"",port:8000,autoConnect:false,beaconEnabled:false,beacon:"",beaconInterval:240,beaconDest:"BEACON",beaconVia:"",appFontSize:15,connFontSize:14,unprotoFontSize:14,rawKissDisplay:false,debugTxEnabled:false,deduplicatePackets:false,simpleUnproto:false,onlyUnproto:false,hideVia:false,unprotoIgnoredDestinations:"NODES BEACON ID",unprotoTo:"",unprotoVia:"",theme:"dark",unprotoColors:null,messageBoardEnabled:false,messageBoardCallsign:"",messageBoardSsid:1,messageBoardSysops:"",messageBoardPrivacy:false,messageBoardPublicAliases:"ALL"};
+  }
+  window.__TAURI_INTERNALS__={
+    transformCallback:function(){return 0},
+    metadata:{currentWindow:{label:"main"}},
+    invoke:function(cmd,args){
+      switch(cmd){
+        case "load_settings": return Promise.resolve(_previewSettings());
+        case "save_settings": try{_ls.setItem(_key,JSON.stringify(args&&args.settings||{}))}catch(e){} return Promise.resolve(null);
+        case "reset_settings": try{_ls.removeItem(_key)}catch(e){} return Promise.resolve(null);
+        case "append_log": return Promise.resolve(null);
+        case "open_log_dir": return Promise.resolve(null);
+        default: return Promise.resolve(null);
+      }
+    }
+  };
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:function(){}};
+}
+</script>
+  <script type="module" src="/src/main.js"></script>
+</head>
+<body>
+<div id="app">
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <div id="topbar-left">
+      <img class="app-logo" src="/k2k-logo.png" alt="K2K" />
+      <div id="conn-area">
+        <div id="addr-line">
+          <span id="conn-dot" class="red"></span>
+          <span id="addr-text">None</span>
+          <input id="host" readonly placeholder="None" aria-hidden="true" />
+          <input id="port" type="number" readonly value="8000" min="1" max="65535" aria-hidden="true" />
+        </div>
+        <button id="connect-btn">Connect</button>
+      </div>
+    </div>
+    <div id="badge-row">
+      <span id="beacon-indicator" class="hidden" title="Disable the beacon" onclick="openBeaconConfirm()">BEACON</span>
+      <span id="pbbs-indicator" class="hidden" title="Message board admin console (local — no RF)" onclick="openPbbsAdmin()">PBBS</span>
+    </div>
+    <div id="conn-status" class="idle" style="display:none"><span class="dot gray"></span> Disconnected</div>
+    <div id="topbar-right">
+      <button id="fullscreen-btn" title="Toggle fullscreen">⛶</button>
+      <button class="settings-btn" id="help-btn" title="How to use">&#63;</button>
+      <button class="settings-btn" id="log-btn" title="Open log folder" onclick="openLogDir()">&#128194;</button>
+      <button class="settings-btn" id="settings-btn">&#9881;</button>
+      <span id="app-version" style="font-size:10px;color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.12</span>
+    </div>
+    <script>{!function(){try{if(window.__TAURI__)__TAURI__.app.getVersion().then(function(v){var e=document.getElementById('app-version');if(e)e.textContent='v'+v})}catch(e){}}()}</script>
+    <script>(function(){function s(){var h=document.getElementById('host'),p=document.getElementById('port'),t=document.getElementById('addr-text');if(!h||!p||!t)return;var hv=h.value||'';var pv=p.value||'';t.textContent=hv?hv+':'+pv:(pv||'None')}function g(){s();requestAnimationFrame(g)}setTimeout(s,0);g()})();</script>
+  </div>
+
+  <!-- MAIN SPLIT -->
+  <div id="main">
+    <!-- LEFT PANEL (CONNECTED MODE) -->
+    <div id="left-panel">
+      <div id="mode-tabs">
+        <div class="mode-tab active" data-tab="0"><span class="conn-dot gray"></span>C1 <span class="remote-label"></span></div>
+        <div class="mode-tab" data-tab="1"><span class="conn-dot gray"></span>C2 <span class="remote-label"></span></div>
+        <div class="mode-tab" data-tab="2"><span class="conn-dot gray"></span>C3 <span class="remote-label"></span></div>
+        <div class="mode-tab" data-tab="3"><span class="conn-dot gray"></span>C4 <span class="remote-label"></span></div>
+        <span id="left-clear" title="Clear messages">Clear</span>
+      </div>
+      <div id="tab-content">
+        <div id="left-msgs"></div>
+        <div id="retry-indicator" class="retry-indicator"></div>
+        <div id="via-area">
+          <label>Via:</label>
+          <span class="sug-wrap">
+            <input id="via-input" placeholder="DIGI1 DIGI2" oninput="this.value=this.value.toUpperCase();showSuggestions('via-input')" onfocus="showSuggestions('via-input')" onblur="hideSuggestions('via-input')" autocomplete="off" />
+            <div class="sug-panel" id="sug-via-input"></div>
+          </span>
+        </div>
+        <div id="compose">
+          <textarea id="compose-in" placeholder=":c CALLSIGN or message..." rows="2"></textarea>
+          <button id="send-btn" disabled>Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DIVIDER -->
+    <div id="divider"></div>
+
+    <!-- RIGHT PANEL (UNPROTO) -->
+    <div id="unproto">
+      <div id="unproto-header">
+        <span>Unproto <span class="u-count" id="u-count">(0)</span></span>
+        <span class="u-header-toggles">
+          <button id="u-simple-btn" class="u-toggle-btn">Simple Unproto</button>
+          <button id="u-dedup-btn" class="u-toggle-btn">Deduplicate Packets</button>
+          <button id="u-only-btn" class="u-toggle-btn">Only Unproto</button>
+        </span>
+        <span id="u-clear" style="color:var(--text2);font-weight:600;cursor:pointer;font-size:var(--unproto-font-size);text-transform:none;border:1px solid var(--border);border-radius:4px;padding:2px 5px;margin-right:0;background:var(--elevated);transition:all .15s">Clear</span>
+      </div>
+      <div id="unproto-data"></div>
+      <div id="unproto-via-row">
+        <div id="unproto-to-area">
+          <label>To:</label>
+          <span class="sug-wrap">
+            <input id="unproto-to" placeholder="CALL" oninput="this.value=this.value.toUpperCase();showSuggestions('unproto-to')" onfocus="showSuggestions('unproto-to')" onblur="hideSuggestions('unproto-to')" autocomplete="off" />
+            <div class="sug-panel" id="sug-unproto-to"></div>
+          </span>
+        </div>
+        <div id="unproto-via-area">
+          <label>Via:</label>
+          <span class="sug-wrap">
+            <input id="unproto-via" placeholder="DIGI1 DIGI2" oninput="this.value=this.value.toUpperCase();showSuggestions('unproto-via')" onfocus="showSuggestions('unproto-via')" onblur="hideSuggestions('unproto-via')" autocomplete="off" />
+            <div class="sug-panel" id="sug-unproto-via"></div>
+          </span>
+        </div>
+      </div>
+      <div id="unproto-status"></div>
+      <div id="unproto-send-row">
+        <textarea id="unproto-msg" placeholder="Type message..." rows="2"></textarea>
+        <button id="unproto-send" disabled>Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="settings-overlay" class="overlay">
+  <div id="settings-dialog">
+    <h2>Settings <button class="close-s" id="close-settings">&#10005;</button></h2>
+    <form autocomplete="off" onsubmit="return false" style="display:contents">
+    <div id="settings-scroll"><div class="s-body">
+      <div class="sg"><h3>Station</h3>
+        <div class="sr"><label>Callsign</label><input id="set-call" placeholder="KD7ABC" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" /></div>
+      </div>
+      <div class="sg"><h3>Connection</h3>
+        <div class="sr"><label>Protocol</label>
+          <div class="cs-wrapper">
+            <div class="cs-selected" id="cs-protocol-selected" tabindex="0" role="combobox">
+              <span class="cs-text">AGWPE (Direwolf/TNC)</span>
+              <span class="cs-arrow">&#9660;</span>
+            </div>
+            <div class="cs-options" id="cs-protocol-options">
+              <div class="cs-opt" data-value="AGWPE">AGWPE (Direwolf/TNC)</div>
+              <div class="cs-opt" data-value="KISS">KISS (Direwolf/TNC)</div>
+              <div class="cs-opt" data-value="APRS"><span class="beta">Beta</span> APRS</div>
+            </div>
+            <select id="set-protocol" style="display:none" onchange="applyProtocolDefaults()">
+              <option value="AGWPE">AGWPE (Direwolf/TNC)</option>
+              <option value="KISS">KISS (Direwolf/TNC)</option>
+              <option value="APRS">Beta APRS</option>
+            </select>
+          </div>
+        </div>
+        <div class="sr"><label>Default Host</label><input id="set-host" placeholder="IP or hostname" /></div>
+        <div class="sr"><label>Default Port</label><input id="set-port" type="number" value="8000" /></div>
+        <div class="sr"><label>Auto-Connect on Start</label><input id="set-autoconnect" type="checkbox" /></div>
+      </div>
+      <div class="sg" id="kiss-settings-group" style="display:none"><h3>KISS TNC Parameters</h3>
+        <div class="sr"><label>TX Delay (×10ms) <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">PTT key-up delay before transmitting</span></label><input id="set-kiss-txdelay" type="number" min="0" max="255" value="30" /></div>
+        <div class="sr"><label>Persistence (0–255) <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">CSMA probability (p = value/256)</span></label><input id="set-kiss-p" type="number" min="0" max="255" value="63" /></div>
+        <div class="sr"><label>Slot Time (×10ms) <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">CSMA listen interval</span></label><input id="set-kiss-slot" type="number" min="0" max="255" value="10" /></div>
+        <div class="sr"><label>T1 Retry (×10ms) <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Time before resending un-ACK'd frame (1000 = 10s default)</span></label><input id="set-kiss-t1" type="number" min="10" max="6000" value="1000" /></div>
+        <div class="sr"><label>T2 ACK Delay (×10ms) <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Wait before sending ACK after receiving data (100 = 1s default)</span></label><input id="set-kiss-t2" type="number" min="10" max="1000" value="100" /></div>
+        <div class="sr"><label>T3 Keepalive (×10ms) <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Inactivity timeout before sending keep-alive probe (30000 = 5min default)</span></label><input id="set-kiss-t3" type="number" min="1000" max="60000" value="30000" /></div>
+        <div class="sr"><label>KA Check (×10ms) <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">How often to check for T3 expiration (6000 = 1min default)</span></label><input id="set-kiss-kacheck" type="number" min="500" max="30000" value="6000" /></div>
+        <div class="sr"><label>N2 Max Retries <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Max retransmissions before forced disconnect (5 default)</span></label><input id="set-kiss-n2" type="number" min="1" max="50" value="5" /></div>
+      </div>
+      <div class="sg"><h3>Display</h3>
+        <div class="sr"><label>Theme</label>
+          <select id="set-theme" class="theme-select" onchange="var v=this.value;document.documentElement.setAttribute('data-theme',v==='dark'?'':v)">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="blue">Blue</option>
+            <option value="sepia">Sepia</option>
+            <option value="synthwave">Synthwave</option>
+            <option value="vintage">Vintage</option>
+          </select>
+        </div>
+        <div class="sr"><label>Unproto Font Colors</label><button type="button" id="open-fontcolors" onclick="openFontColors()">Font Colors&#8230;</button></div>
+        <div class="sr"><label>App Font Size</label>
+          <select id="set-app-fontsize">
+            <option value="13">Small</option>
+            <option value="15" selected>Medium</option>
+            <option value="17">Large</option>
+          </select>
+        </div>
+        <div class="sr"><label>Connected Mode Font Size</label><input id="set-conn-fontsize" type="number" value="14" min="8" max="25" onblur="var v=parseInt(this.value);if(v<8||v>25)this.value=v<8?14:25" /></div>
+        <div class="sr"><label>Unproto Font Size</label><input id="set-unproto-fontsize" type="number" value="14" min="8" max="25" onblur="var v=parseInt(this.value);if(v<8||v>25)this.value=v<8?14:25" /></div>
+        <div class="sr"><label>Deduplicate Packets</label><input id="set-dedup" type="checkbox" /></div>
+        <div class="sr"><label>Simple Unproto Display</label><input id="set-simple-unproto" type="checkbox" /></div>
+        <div class="sr"><label>Hide Via in Simple Unproto</label><input id="set-hide-via" type="checkbox" /></div>
+        <div class="sr"><label>Only Unproto Mode</label><input id="set-only-unproto" type="checkbox" /></div>
+        <div class="sr" style="flex-direction:column;align-items:stretch">
+          <label>Ignored Destinations in Simple Unproto <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 2px)">(destinations space separated)</span></label>
+          <textarea id="set-ignored-dest" rows="2" placeholder="NODES BEACON ID" style="width:100%;background:var(--elevated);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:inherit;outline:none;font-family:var(--mono);margin-top:4px;resize:none" oninput="this.value=this.value.toUpperCase()"></textarea>
+        </div>
+      </div>
+      <div class="sg"><h3>Beacon</h3>
+        <div class="sr"><label>Enable Beacon</label><input id="set-beacon-enabled" type="checkbox" /></div>
+        <div class="sr"><label>Beacon Text</label><input id="set-beacon" placeholder="Your beacon text here" /></div>
+        <div class="sr"><label>Destination</label><input id="set-beacon-dest" placeholder="CALLSIGN" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" /></div>
+        <div class="sr"><label>Via</label><input id="set-beacon-via" placeholder="DIGI1 DIGI2" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" /></div>
+        <div class="sr"><label>Interval (min)</label><input id="set-beacon-int" type="number" value="15" /></div>
+      </div>
+      <div class="sg"><h3>Message Board</h3>
+        <div class="sr"><label>Enable Message Board <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Listen for connects to the board callsign (up to 4 users)</span></label><input id="set-mb-enabled" type="checkbox" /></div>
+        <div class="sr"><label>Board Callsign <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Callsign others connect to (defaults to your callsign with SSID 1 — change it if you like)</span></label><input id="set-mb-callsign" placeholder="KK6ABC-1" maxlength="9" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" /></div>
+        <div class="sr"><label>Sysops <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Comma-separated callsigns with Delete/Pin admin rights (e.g. KK6ABC, KK6DEF). Your station callsign always has sysop rights for the local admin console.</span></label><input id="set-mb-sysops" placeholder="KK6ABC,KK6DEF" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" /></div>
+        <div class="sr"><label>Privacy Mode <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Users only see mail to/from them or public aliases</span></label><input id="set-mb-privacy" type="checkbox" onchange="var r=document.getElementById('mb-aliases-row');if(r)r.style.display=this.checked?'':'none'" /></div>
+        <div id="mb-aliases-row" style="display:none"><div class="sr"><label>Public Aliases <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Group destinations anyone can read (comma separated; ALL included by default)</span></label><input id="set-mb-aliases" placeholder="ALL, TECH, PKTNET" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" /></div></div>
+        <div class="sr"><label>Max Packet Size <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Bytes per outgoing board packet (32–256, default 250). 250 fills VHF packets; use 64–128 on HF or weak paths where long frames are fragile.</span></label><input id="set-mb-maxpacket" type="number" min="32" max="256" value="250" /></div>
+      </div>
+      <div class="sg"><h3>Debug</h3>
+        <div class="sr"><label>Debug TX frames (Unproto) <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 2px)">(KISS protocol only)</span></label><input id="set-debugtx" type="checkbox" /></div>
+        <div class="sr"><label>Raw KISS Display <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 2px)">(KISS protocol only)</span></label><input id="set-rawkiss" type="checkbox" /></div>
+      </div>
+    </div></div><!-- /s-body /settings-scroll -->
+    </form>
+    <div class="sa"><button id="settings-reset">Reset to Defaults</button><button id="settings-cancel">Cancel</button><button class="primary" id="settings-save">Save</button></div>
+  </div>
+</div>
+
+<!-- UNPROTO FONT COLORS MODAL -->
+<div id="fontcolors-overlay" class="overlay">
+  <div id="fontcolors-dialog">
+    <h2>Packet Font Colors <button class="close-s" onclick="fcCancel()">&#10005;</button></h2>
+    <div id="fontcolors-scroll">
+      <div class="fc-sample">
+        <div class="fc-hdr"><span id="fc-s-time"></span> <span id="fc-s-src"></span> <span id="fc-s-to"></span> <span id="fc-s-dst"></span> <span id="fc-s-via"></span> <span id="fc-s-meta"></span></div>
+        <div><span id="fc-s-payload"></span></div>
+        <div class="fc-conn"><span id="fc-c-msg"></span></div>
+      </div>
+      <div id="fc-rows"></div>
+      <div class="fc-note">These colors apply only to the <b id="fc-theme-name2">Dark</b> theme. Sent packet payloads keep their fixed color.</div>
+    </div>
+    <div class="sa"><button onclick="fcDefaults()">Defaults</button><button onclick="fcCancel()">Cancel</button><button class="primary" onclick="fcSave()">Save</button></div>
+  </div>
+</div>
+
+<!-- RESET CONFIRMATION OVERLAY -->
+<div id="reset-overlay" class="overlay">
+  <div style="max-width:400px;text-align:center;padding:30px">
+    <h3 style="margin:0 0 12px">&#9888; Settings Reset</h3>
+    <p style="margin:0 0 20px;color:var(--text2);line-height:1.5">Settings have been restored to factory defaults. Please <strong>close and reopen the app</strong> for all changes to take effect.</p>
+    <button class="primary" id="close-reset-overlay" style="padding:8px 24px">OK</button>
+  </div>
+</div>
+
+<!-- BEACON DISABLE CONFIRMATION OVERLAY -->
+<div id="beacon-disable-confirm" class="overlay">
+  <div style="max-width:380px;text-align:center;padding:26px 28px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4)">
+    <h3 style="margin:0 0 18px">Disable beacon?</h3>
+    <div style="display:flex;justify-content:center;gap:10px">
+      <button class="primary" id="beacon-confirm-ok" style="padding:7px 26px">OK</button>
+      <button id="beacon-confirm-cancel" style="padding:7px 26px;background:var(--elevated);border:1px solid var(--border);color:var(--text2);border-radius:4px;cursor:pointer">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- BEACON WARNING OVERLAY -->
+<div id="beacon-warning" class="overlay">
+  <div id="beacon-dialog">
+    <h2>⚠️ Beacon Not Configured</h2>
+    <p id="beacon-warning-msg" style="margin:0 0 24px;color:var(--text2);line-height:1.5;padding:8px 0;font-size:var(--app-font-size)">Please fill in all beacon fields or disable the beacon.</p>
+    <div style="display:flex;justify-content:center"><button class="primary" onclick="document.getElementById('beacon-warning').classList.remove('open')" style="padding:8px 32px">OK</button></div>
+  </div>
+</div>
+
+<!-- MESSAGE BOARD WARNING OVERLAY -->
+<div id="mb-warning" class="overlay">
+  <div id="mb-dialog">
+    <h2>⚠️ Message Board Not Configured</h2>
+    <p id="mb-warning-msg" style="margin:0 0 24px;color:var(--text2);line-height:1.5;padding:8px 0;font-size:var(--app-font-size)">Enter a valid board callsign or disable the message board.</p>
+    <div style="display:flex;justify-content:center"><button class="primary" onclick="document.getElementById('mb-warning').classList.remove('open')" style="padding:8px 32px">OK</button></div>
+  </div>
+</div>
+
+<!-- HELP MODAL -->
+<div id="help-overlay" class="overlay">
+  <div id="help-dialog">
+    <h2>K2K Packet Desktop — Quick Start <button class="close-s" id="close-help">&#10005;</button></h2>
+    <div class="h-body">
+
+<h3>Connect</h3>
+<p>Enter your Direwolf TNC's <strong>IP</strong> and <strong>Port</strong> in the top bar, then click <strong>Connect</strong>. The default port is <code>8000</code> for AGW or <code>8001</code> for KISS. Set your callsign in the Settings panel (<span class="key">&#9881;</span> gear icon). The connection status indicator turns green when connected.</p>
+
+<h3>Connected Mode (C1–C4 Tabs)</h3>
+<p>The four tabs <strong>C1</strong> through <strong>C4</strong> let you run up to four separate connected-mode sessions simultaneously. Click a tab to select it.</p>
+
+<div class="cmd">:c CALLSIGN</div>
+<p>Type <code>:c</code> followed by a callsign and press <span class="key">Enter</span> to initiate a connected-mode session. Optionally fill the <strong>Via</strong> field with digipeaters (space-separated). Example: <code>:c KD7ABC</code> or <code>:c KD7ABC-3</code> with Via: <code>DIGI1 DIGI2</code></p>
+
+<div class="cmd">:d</div>
+<p>Type <code>:d</code> and press <span class="key">Enter</span> to disconnect the current tab's session.</p>
+
+<p>Once connected, type a message and press <span class="key">Enter</span> to send it. Use <span class="key">Shift+Enter</span> for multi-line messages. Arrow keys navigate your send history.</p>
+
+<h3>Unproto Mode (UI Frames)</h3>
+<p>The right panel displays all received and sent unproto (UI) frames. You can transmit unproto frames using the input fields at the bottom:</p>
+<ul style="color:var(--text2);font-size:12px;margin:4px 0 8px 20px;padding:0">
+  <li><strong>To</strong> — destination callsign (required)</li>
+  <li><strong>Via</strong> — digipeater path (optional, space-separated)</li>
+  <li><strong>Message</strong> — the text to send</li>
+</ul>
+<p>Click <strong>Simple Unproto</strong> to toggle simplified header display. Click <strong>Deduplicate Packets</strong> to filter duplicate UI frames from different digipeaters.</p>
+
+<h3>Beacon</h3>
+<p>Set up an automatic beacon in Settings (<span class="key">&#9881;</span>). Enable the beacon, set your beacon text, destination (default <code>BEACON</code>), optional Via path, and interval in minutes. The beacon transmits automatically while connected.</p>
+
+<h3>Tips</h3>
+<p>
+- <strong>Auto-connect</strong> — enable in Settings to connect automatically on app startup.<br>
+- <strong>Clear</strong> buttons clear the message log or unproto display.<br>
+- <strong>Retry indicator</strong> — shows T1 retry count and timeout during connected-mode sends.<br>
+- <strong>Raw KISS</strong> — enable in Settings to see raw hex KISS frames instead of decoded messages.<br>
+- Settings are saved to disk and persist across restarts.
+</p>
+
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+
+<!-- PBBS ADMIN CONSOLE (local — no RF) -->
+<div id="pbbs-overlay" class="overlay">
+  <div id="pbbs-dialog">
+    <h2>Message Board Admin <span style="font-size:11px;color:var(--muted);font-weight:400">local console — nothing goes over RF</span><button class="close-s" id="pbbs-clear" style="margin-left:auto">Clear</button><button class="close-s" id="close-pbbs">&#10005;</button></h2>
+    <div id="pbbs-console" spellcheck="false"></div>
+    <div id="pbbs-input-row">
+      <input id="pbbs-input" placeholder="Type a board command (B, L, R, S, K, P, Help)..." spellcheck="false" autocomplete="off" />
+      <button id="pbbs-send">Send</button>
+    </div>
+  </div>
+</div>
+
+
+</body>
+
+
+
+
+
+
+</html>
