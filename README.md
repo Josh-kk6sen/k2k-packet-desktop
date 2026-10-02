@@ -31,6 +31,16 @@ Connects over TCP to any KISS-compatible TNC (Direwolf, LinPac, ser2net, etc.) a
 - **Backend** (`src-tauri/`) — Rust Tauri commands implementing the KISS layer, AGWPE frame routing, AX.25 session state machines, history/settings persistence, and logging.
 - **Tests** (`tests/frontend/`) — jsdom-based smoke test that loads the real production module graph and asserts DOM wiring + window globals.
 
+## Screenshots
+
+![Connected mode](screenshots/k2k-packet-desktop-06-connected-mode.jpeg)
+
+| | |
+|---|---|
+| ![Connection screen](screenshots/k2k-packet-desktop-01-connection.jpeg) | ![Message log](screenshots/k2k-packet-desktop-02-log.jpeg) |
+| ![Toggled buttons](screenshots/k2k-packet-desktop-03-toggles.jpeg) | ![Help screen](screenshots/k2k-packet-desktop-04-help.jpeg) |
+| ![Settings](screenshots/k2k-packet-desktop-05-settings.jpeg) | &nbsp; |
+
 ## Getting started
 
 **Prerequisites:** Node.js 20+, Rust stable, and the [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/).
