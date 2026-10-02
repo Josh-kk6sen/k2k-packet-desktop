@@ -1,6 +1,11 @@
 # K2K Packet Desktop
 
+[![Release](https://img.shields.io/github/v/release/Josh-kk6sen/k2k-packet-desktop?label=download&color=238636)](https://github.com/Josh-kk6sen/k2k-packet-desktop/releases/latest)
+
 A cross-platform **KISS packet radio terminal** for Windows and Linux — matching the look and feel of the K2K Packet Android app.
+
+> **📥 Download the latest installers** (Windows `.exe` + Debian `.deb`) from the **[Releases page](https://github.com/Josh-kk6sen/k2k-packet-desktop/releases/latest)**.
+> Or build from source — see [Getting started](#getting-started) below.
 
 Connects over TCP to any KISS-compatible TNC (Direwolf, LinPac, ser2net, etc.) and provides a full connected-mode AX.25 terminal.
 
