@@ -15,7 +15,10 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 22 required: the frontend smoke test loads jsdom whose
+          # transitive dep (@exodus/bytes, via jsdom v30) is ESM-only and
+          # crashes Node 20's require(). Node 22 supports require(esm).
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -35,6 +38,21 @@ jobs:
 
       - name: Rust toolchain
         run: rustup update stable && rustup default stable
+
+      # Tauri's Linux build needs these system libraries; ubuntu-latest
+      # runners don't ship them, so cargo check would fail to link.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl wget file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            pkg-config
 
       - name: cargo check
         working-directory: src-tauri
