@@ -82,9 +82,10 @@
     if (!filtered.length) { panel.classList.remove("open"); panel.innerHTML = ""; return; }
     // Array is oldest-first, newest-last. Display as-is → oldest at top, newest at bottom.
     panel.innerHTML = filtered.map(function (v) {
-      var esc = v.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-      return "<div class=\"sug-item\" data-val=\"" + esc + "\" onmousedown=\"event.preventDefault();pickSuggestion('" + id + "',this)\">" +
-        "<span class=\"sug-val\">" + v + "</span>" +
+      var escAtt = String(v).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+      var escTxt = String(v).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; });
+      return "<div class=\"sug-item\" data-val=\"" + escAtt + "\" onmousedown=\"event.preventDefault();pickSuggestion('" + id + "',this)\">" +
+        "<span class=\"sug-val\">" + escTxt + "</span>" +
         "<span class=\"sug-del\" title=\"Remove from history\" onmousedown=\"event.preventDefault();event.stopPropagation();deleteSuggestion('" + id + "',this)\"><img class=\"sug-x\" src=\"/redx.png\" width=\"20\" height=\"20\" alt=\"remove\"/></span></div>";
     }).join("");
     panel.classList.add("open");

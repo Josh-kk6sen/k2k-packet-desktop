@@ -43,7 +43,7 @@ Connects over TCP to any KISS-compatible TNC and provides a full connected-mode 
 
 ## Getting started
 
-**Prerequisites:** Node.js 20+, Rust stable, and the [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/).
+**Prerequisites:** Node.js 22+, Rust stable, and the [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
 npm install        # install frontend deps
@@ -65,9 +65,18 @@ Set your TNC in the app's Settings page. The default protocol is **AGWPE**; swit
 
 ## CI
 
-`.github/workflows/ci.yml` runs two gates on every push/PR:
-1. **Frontend** — Vite build + the jsdom smoke test
+`.github/workflows/ci.yml` runs on every push/PR:
+1. **Frontend** — Vite build + the jsdom smoke test (Node 22)
 2. **Rust** — `cargo check` + `cargo test`
+3. **Windows cross-check** — verifies the Rust backend cross-compiles for
+   Windows (MinGW) from Linux, exercising the `x86_64-pc-windows-gnu` linker
+   config in `src-tauri/.cargo/config.toml`.
+
+Note: `live_test.rs` integration tests skip (not fail) when the KISS/AGW sim
+service on `:8181`/`:8182` isn't running — they don't add coverage in CI.
+
+Release installers (`.exe`/`.deb`) are produced and published as GitHub
+Release artifacts on tag pushes; see `.github/workflows/release.yml`.
 
 ## License
 

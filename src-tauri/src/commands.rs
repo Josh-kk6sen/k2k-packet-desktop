@@ -16,6 +16,13 @@ use crate::ax25;
 use crate::kiss;
 use crate::session;
 
+/// Hard cap on a single KISS / AGW frame we are willing to buffer from the
+/// wire. AX.25 frames on 1200/9600 baud are at most a few hundred bytes, but a
+/// corrupt or malicious TNC peer could declare a huge AGW data_len (u32) or
+/// stream an unterminated KISS frame. This bound turns any such stream into a
+/// bounded, droppable error instead of unbounded memory growth.
+pub const MAX_FRAME_BYTES: usize = 65536;
+
 /// Convert an app-layer `AppHandle` into the kernel's owned output handle.
 /// `AppHandle` implements `KernelOutput` (see app/mod.rs), so arithmetic of
 /// ownership is confined to this one helper.
@@ -150,18 +157,33 @@ fn spawn_kiss_reader(
                         // FEND marks both the start AND end of a KISS frame.
                         // We only process when we have both a start and some data.
                         if in_frame && !frame_buf.is_empty() {
-                            let unescaped = kiss::kiss_unescape(&frame_buf);
-                            if unescaped.len() > 1 {
-                                // First byte is the KISS command/port byte
-                                let payload = &unescaped[1..];
-                                log_packet(&unescaped, "KISS RX");
-                                session::process_incoming_frame(payload, &client, &out).await;
+                            // Guard against an unterminated / over-sized frame
+                            // (a peer that streams data without ever closing it,
+                            // or a frame beyond any plausible AX.25 size). Drop
+                            // the whole frame rather than growing unboundedly.
+                            if frame_buf.len() <= MAX_FRAME_BYTES {
+                                let unescaped = kiss::kiss_unescape(&frame_buf);
+                                if unescaped.len() > 1 {
+                                    // First byte is the KISS command/port byte
+                                    let payload = &unescaped[1..];
+                                    log_packet(&unescaped, "KISS RX");
+                                    session::process_incoming_frame(payload, &client, &out).await;
+                                }
                             }
+                            frame_buf.clear();
+                        } else if in_frame {
+                            // An empty FEND closes an empty frame — drop it.
                             frame_buf.clear();
                         }
                         in_frame = true;
                     } else if in_frame {
                         frame_buf.push(b);
+                        // Hard guard: if a peer streams long past a plausible
+                        // frame size without a closing FEND, stop accumulating
+                        // (stay in-frame so we resync on the next FEND).
+                        if frame_buf.len() > MAX_FRAME_BYTES {
+                            frame_buf.truncate(MAX_FRAME_BYTES);
+                        }
                     }
                 }
                 Err(_) => {
@@ -206,12 +228,28 @@ fn spawn_agw_reader(
                 Ok(n) => {
                     read_failures = 0; // Reset on successful read
                     accum.extend_from_slice(&buf[..n]);
+                    // Hard cap: a peer-controlled AGW data_len (full u32 range)
+                    // must not drive unbounded buffering. If a frame declares a
+                    // length beyond MAX_FRAME_BYTES, drain into the void so the
+                    // stream stays byte-synced instead of growing accum forever.
+                    let mut dropped = false;
+                    if accum.len() > MAX_FRAME_BYTES * 2 {
+                        accum.truncate(MAX_FRAME_BYTES);
+                        dropped = true;
+                    }
                     loop {
                         if accum.len() < agw::AGW_HEADER_SIZE {
                             break;
                         }
                         if let Some(frame) = agw::parse_frame(&accum) {
-                            let total = agw::AGW_HEADER_SIZE + frame.data_len as usize;
+                            let declared = frame.data_len as usize;
+                            if declared > MAX_FRAME_BYTES {
+                                // Impossible frame — skip past the header and
+                                // keep scanning for the next plausible frame.
+                                accum.remove(0);
+                                continue;
+                            }
+                            let total = agw::AGW_HEADER_SIZE + declared;
                             if accum.len() < total {
                                 break;
                             }
@@ -225,6 +263,7 @@ fn spawn_agw_reader(
                             accum.remove(0);
                         }
                     }
+                    let _ = dropped;
                 }
                 Err(_) => {
                     if handle_read_failure(&client, &app_handle, &conn_id, &mut read_failures).await
@@ -1178,13 +1217,17 @@ async fn on_agw_connected(
                 bbs_cfg,
                 ..
             } = &mut *c;
-            let s = server_sessions[free].as_mut().unwrap();
-            let store = bbs_store.as_mut().unwrap();
-            let mut lines = s.bbs.as_mut().unwrap().connect_output(store, bbs_cfg);
+            // Degrade gracefully instead of panicking if the board store or the
+            // fresh server session failed to initialize — never take down the
+            // whole reader task over a missing engine.
+            let Some(s) = server_sessions[free].as_mut() else { return; };
+            let Some(store) = bbs_store.as_mut() else { return; };
+            let Some(engine) = s.bbs.as_mut() else { return; };
+            let mut lines = engine.connect_output(store, bbs_cfg);
             // Command list line — the kernel server path appends the
             // prompt to the welcome; the AGW path must too, or the
             // connected client never learns the commands.
-            lines.push(s.bbs.as_ref().unwrap().prompt(bbs_cfg));
+            lines.push(engine.prompt(bbs_cfg));
             lines
         };
         // Pack the banner to the session's max packet size — one AGW 'D'

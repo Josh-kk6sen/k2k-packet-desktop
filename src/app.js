@@ -210,7 +210,6 @@ async function connectTnc() {
     await invoke(connCmd("kiss_connect", "agw_connect"), { id, label: base, host: hostv, port: portv, callsign: base, ssid });
     conn.cx = true;
     setConnStatus("connected", "Connected");
-    startBeacon();
     sendBtn.disabled = false;
     unprotoSend.disabled = false;
     connectBtn.textContent = "Disconnect";
@@ -239,9 +238,16 @@ async function connectTnc() {
   }
 }
 
+// In-flight connect guard: prevents a double-click (or re-click during the
+// async connect) from spawning a second backend session / orphaning the first.
+let connecting = false;
+
 connectBtn.onclick = async () => {
   if (conn && conn.cx) { await disconnectTnc(); return; }
-  await connectTnc();
+  if (connecting) return;
+  connecting = true;
+  try { await connectTnc(); }
+  finally { connecting = false; }
 };
 
 // ── Command line (compose-in) ──
@@ -391,7 +397,7 @@ function renderUnproto() {
         }
         out += `<div class="u-header"><span class="h-time">${esc(entry.ts)}</span> <span class="h-src">${esc(entry.src)}</span> to <span class="h-dst">${esc(entry.dst || "")}</span><span class="h-via">${uv}</span></div>`;
       } else {
-        const q = hdr.replace(/^radio:\s*(?:fm\s+)?/, entry.ts + " ").replace(/^(\d{2}:\d{2}:\d{2})\s+(\S+)\s+to\s+(\S+?)(?:\s+(via\s+\S+(?:\s+\S+)*?(?=\s+ctl\s|\s+len\s|$)))?\s+(.*)$/, '<span class="h-time">$1</span> <span class="h-src">$2</span> <span class="h-to">to</span> <span class="h-dst">$3</span> <span class="h-via">$4</span> <span class="h-meta">$5</span>');
+        const q = hdr.replace(/^radio:\s*(?:fm\s+)?/, entry.ts + " ").replace(/^(\d{2}:\d{2}:\d{2})\s+(\S+)\s+to\s+(\S+?)(?:\s+(via\s+\S+(?:\s+\S+)*?(?=\s+ctl\s|\s+len\s|$)))?\s+(.*)$/, (m, t, s, d, v, rest) => `<span class="h-time">${esc(t)}</span> <span class="h-src">${esc(s)}</span> <span class="h-to">to</span> <span class="h-dst">${esc(d)}</span> <span class="h-via">${esc(v || "")}</span> <span class="h-meta">${esc(rest)}</span>`);
         out += `<div class="u-header">${q}</div>`;
       }
     } else {
@@ -427,7 +433,7 @@ $("#u-dedup-btn").onclick = async () => {
   const dd = document.querySelector("#set-dedup");
   if (dd) dd.checked = settings.deduplicatePackets;
   renderUnproto();
-  try { await invoke("save_settings", { settings }); } catch (e) {}
+  savePathwayField("deduplicatePackets", settings.deduplicatePackets);
 };
 $("#u-simple-btn").onclick = async () => {
   settings.simpleUnproto = !settings.simpleUnproto;
@@ -439,7 +445,7 @@ $("#u-simple-btn").onclick = async () => {
   const dv = document.getElementById("divider");
   if (lp) lp.style.display = settings.onlyUnproto ? "none" : "";
   if (dv) dv.style.display = settings.onlyUnproto ? "none" : "";
-  try { await invoke("save_settings", { settings }); } catch (e) {}
+  savePathwayField("simpleUnproto", settings.simpleUnproto);
 };
 $("#u-only-btn").onclick = async () => {
   settings.onlyUnproto = !settings.onlyUnproto;
@@ -450,7 +456,7 @@ $("#u-only-btn").onclick = async () => {
   const dv = document.getElementById("divider");
   if (lp) lp.style.display = settings.onlyUnproto ? "none" : "";
   if (dv) dv.style.display = settings.onlyUnproto ? "none" : "";
-  try { await invoke("save_settings", { settings }); } catch (e) {}
+  savePathwayField("onlyUnproto", settings.onlyUnproto);
 };
 uClear.onclick = () => {
   unprotoData.innerHTML = "";
@@ -466,11 +472,26 @@ unprotoSend.onclick = () => sendUnproto();
 
 function saveUnprotoTo() {
   settings.unprotoTo = unprotoTo.value.trim().toUpperCase();
-  try { invoke("save_settings", { settings }); } catch (e) { console.error("save failed", e); }
+  savePathwayField("unprotoTo", settings.unprotoTo);
+}
+function savePathwayField(field, val) {
+  // Merge-save a single settings field: load the full settings from disk,
+  // overlay ONLY this field, then save. Re-saving the module snapshot (as the
+  // old code did) can clobber newer disk changes made by other components
+  // (e.g. beacon.js disabling the beacon) and even re-enable things the user
+  // turned off.
+  (async () => {
+    let base;
+    try { base = await invoke("load_settings"); } catch (e) { base = null; }
+    const merged = (base && typeof base === "object" && Object.keys(base).length) ? base : { ...DEFAULT_SETTINGS };
+    merged[field] = val;
+    try { await invoke("save_settings", { settings: merged }); }
+    catch (e) { console.error("save_settings failed for " + field, e); }
+  })();
 }
 function saveUnprotoVia() {
   settings.unprotoVia = unprotoVia.value.trim().toUpperCase();
-  try { invoke("save_settings", { settings }); } catch (e) { console.error("save failed", e); }
+  savePathwayField("unprotoVia", settings.unprotoVia);
 }
 let unprotoToSaveTimer = null;
 let unprotoViaSaveTimer = null;
@@ -509,7 +530,8 @@ async function sendUnproto() {
   const via = unprotoVia.value.trim();
   settings.unprotoTo = to;
   settings.unprotoVia = via.trim().toUpperCase();
-  try { invoke("save_settings", { settings }); } catch (e) {}
+  savePathwayField("unprotoTo", settings.unprotoTo);
+  savePathwayField("unprotoVia", settings.unprotoVia);
   if (!to || !msg || !conn || !conn.cx) return;
   const parts = to.split("-");
   const base = parts[0];
@@ -770,7 +792,6 @@ $("#settings-save").onclick = async () => {
   }
   $("#u-simple-btn").classList.toggle("active", settings.simpleUnproto);
   $("#u-dedup-btn").classList.toggle("active", settings.deduplicatePackets);
-  startBeacon();
   settingsOverlay.classList.remove("open");
   renderUnproto();
   renderTab(activeTab);
@@ -854,7 +875,6 @@ listen("tnc-connected", (ev) => {
   if (conn && conn.id === ev.payload.id) {
     conn.cx = true;
     setConnStatus("connected", "Connected");
-    startBeacon();
     connectBtn.textContent = "Disconnect";
     connectBtn.className = "disconnect";
     hostEl.disabled = true;
@@ -867,11 +887,6 @@ listen("tnc-connected", (ev) => {
 listen("tnc-disconnected", (ev) => {
   if (conn && conn.id === ev.payload.id) disconnectTnc();
 });
-
-let beaconTimer = null;
-function startBeacon() {
-  if (beaconTimer) { clearInterval(beaconTimer); beaconTimer = null; }
-}
 
 // ── Retry / ACK indicator ──
 const retryIndicator = $("#retry-indicator");

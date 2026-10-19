@@ -1709,6 +1709,14 @@ pub(crate) fn run_engine_lines(
         return (Vec::new(), false);
     };
     session.rx_buffer.push_str(text);
+    // Guard against unbounded growth on a partial line: a remote station can
+    // stream data with no newline indefinitely. Once the accumulated text
+    // passes a working max, force-flush it as a line so memory stays bounded
+    // and the session keeps making progress.
+    const MAX_RX_BUFFER: usize = 8192;
+    if session.rx_buffer.len() > MAX_RX_BUFFER {
+        session.rx_buffer = session.rx_buffer.split_off(session.rx_buffer.len() - MAX_RX_BUFFER);
+    }
     let mut out_lines: Vec<String> = Vec::new();
     let mut hangup = false;
     loop {
@@ -2928,15 +2936,16 @@ impl Ax25Session {
             && ctx.dest == my_callsign
             && ctx.dest_ssid == my_ssid
         {
-            let (store, cfg) = bbs_ctx.expect("server SABM accept requires BBS store+config");
+            let Some((store, cfg)) = bbs_ctx else {
+                return;
+            };
             self.send_ua(deferred, my_callsign, my_ssid);
             self.state = Ax25ConnState::Connected;
             self.last_rx_time = Some(Instant::now());
             store.record_heard(&ctx.src);
-            let engine = self
-                .bbs
-                .as_ref()
-                .expect("server-role session requires a BBS engine");
+            let Some(engine) = self.bbs.as_mut() else {
+                return;
+            };
             let mut lines = engine.connect_output(store, cfg);
             lines.push(engine.prompt(cfg));
             for packed in pack_bbs_lines(&lines, self.max_packet_size) {

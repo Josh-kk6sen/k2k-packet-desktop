@@ -54,19 +54,29 @@ window.openPbbsAdmin = openPbbsAdmin;
   // checkbox only populates once the modal has been opened — ask Rust for the
   // live settings when the checkbox says off.
   var pbbsIndicator = document.getElementById("pbbs-indicator");
+  var pbbsOverlayEl = document.getElementById("pbbs-overlay");
+  var _cachedMbOn = null;
   async function updatePbbsIndicator() {
     var mbCheckbox = document.getElementById("set-mb-enabled");
+    // Fast path: the checkbox (populated after Settings opens) is authoritative
+    // and avoids a load_settings IPC round-trip every 2s.
     var on = !!(mbCheckbox && mbCheckbox.checked);
-    if (!on) {
+    if (mbCheckbox) {
+      _cachedMbOn = on;
+    } else if (_cachedMbOn === null || !on) {
       try {
         var s = await window.__TAURI_INTERNALS__.invoke("load_settings");
         on = !!(s && s.messageBoardEnabled);
+        _cachedMbOn = on;
       } catch (e) {}
     }
     if (pbbsIndicator) {
+      var open = pbbsOverlayEl && pbbsOverlayEl.classList.contains("open");
       pbbsIndicator.className = on ? "" : "hidden";
-      if (on) {
-        // Show a live connected-user count: "PBBS 0/4", "1/4", … "4/4".
+      // Only hit pbbs_users when the indicator is actually meaningful to
+      // refresh (board enabled, console closed) — avoids needless IPC churn
+      // while the user is reading the console or the board is off.
+      if (on && !open) {
         try {
           var u = await window.__TAURI_INTERNALS__.invoke("pbbs_users");
           var n = (u && typeof u.users === "number") ? u.users : 0;

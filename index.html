@@ -698,7 +698,7 @@ if(!window.__TAURI_INTERNALS__){
       <button class="settings-btn" id="help-btn" title="How to use">&#63;</button>
       <button class="settings-btn" id="log-btn" title="Open log folder" onclick="openLogDir()">&#128194;</button>
       <button class="settings-btn" id="settings-btn">&#9881;</button>
-      <span id="app-version" style="font-size:10px;color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.12</span>
+      <span id="app-version" style="font-size:10px;color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.13</span>
     </div>
     <script>{!function(){try{if(window.__TAURI__)__TAURI__.app.getVersion().then(function(v){var e=document.getElementById('app-version');if(e)e.textContent='v'+v})}catch(e){}}()}</script>
     <script>(function(){function s(){var h=document.getElementById('host'),p=document.getElementById('port'),t=document.getElementById('addr-text');if(!h||!p||!t)return;var hv=h.value||'';var pv=p.value||'';t.textContent=hv?hv+':'+pv:(pv||'None')}function g(){s();requestAnimationFrame(g)}setTimeout(s,0);g()})();</script>
