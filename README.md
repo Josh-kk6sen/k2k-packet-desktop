@@ -9,13 +9,13 @@ A cross-platform **KISS packet radio terminal** for Windows and Linux — matchi
 > **📥 Download the latest installers** (Windows `.exe` + Debian `.deb`) from the **[Releases page](https://github.com/Josh-kk6sen/k2k-packet-desktop/releases/latest)**.
 > Or build from source — see [Getting started](#getting-started) below.
 
-Connects over TCP to any KISS-compatible TNC (Direwolf, LinPac, ser2net, etc.) and provides a full connected-mode AX.25 terminal.
+Connects over TCP to any KISS-compatible TNC and provides a full connected-mode AX.25 terminal.
 
 ![K2K Packet Desktop](public/k2k-logo.png)
 
 ## Features
 
-- **KISS-over-TCP** connection to any TNC (Direwolf, LinPac, ser2net, …)
+- **KISS-over-TCP** connection to any KISS-compatible TNC
 - **4 connection tabs** with chat, plus a live unproto (monitor) panel
 - **Callsign routing** via digipeaters (closest digipeater auto-selected)
 - **AX.25 connected-mode** with a kernel-faithful protocol implementation
