@@ -71,10 +71,18 @@ jobs:
       - name: Rust toolchain
         run: rustup update stable && rustup default stable
 
-      - name: Install MinGW cross toolchain
-        run: sudo apt-get update && sudo apt-get install -y \
-            gcc-mingw-w64-x86-64 \
-            binutils-mingw-w64-x86-64
+      - name: Install MinGW cross toolchain (diagnostic)
+        run: |
+          set +e
+          sudo apt-get update
+          APT_OUT=$(sudo apt-get install -y gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 2>&1)
+          EXIT=$?
+          if [ $EXIT -ne 0 ]; then
+            echo "::error::APT FAILED ($EXIT): $(echo "$APT_OUT" | grep -iE 'unable|E:|not found|doesn.t have|404|named package|conflict|depends' | head -3 | tr '\n' ' ')"
+            echo "=== full output ==="
+            echo "$APT_OUT" | tail -25
+            exit $EXIT
+          fi
 
       - name: Add Windows target
         run: rustup target add x86_64-pc-windows-gnu
