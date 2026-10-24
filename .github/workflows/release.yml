@@ -8,11 +8,18 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      bundles:
+        description: "Bundles to build (comma-separated; default all)"
+        required: false
+        default: "all"
 
 jobs:
   build-linux:
     name: Build Linux .deb
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || contains('${{ github.event.inputs.bundles }}', 'deb') || contains('${{ github.event.inputs.bundles }}', 'all')
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +63,7 @@ jobs:
   build-windows:
     name: Build Windows .exe
     runs-on: windows-latest
+    if: github.event_name != 'workflow_dispatch' || contains('${{ github.event.inputs.bundles }}', 'exe') || contains('${{ github.event.inputs.bundles }}', 'all')
     steps:
       - uses: actions/checkout@v4
 
@@ -82,3 +90,37 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --bundles nsis
+
+  build-macos:
+    name: Build macOS .dmg
+    runs-on: macos-latest
+    if: github.event_name != 'workflow_dispatch' || contains('${{ github.event.inputs.bundles }}', 'dmg') || contains('${{ github.event.inputs.bundles }}', 'all')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rust toolchain
+        run: rustup update stable && rustup default stable
+
+      # Unsigned for now — macOS adds the "unidentified developer" Gatekeeper
+      # warning; users right-click → Open to bypass. Add an Apple cert later
+      # for real signing.
+      - name: Build + package
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "K2K Packet Desktop ${{ github.ref_name }}"
+          releaseBody: ""
+          releaseDraft: true
+          prerelease: false
+          args: --bundles dmg
