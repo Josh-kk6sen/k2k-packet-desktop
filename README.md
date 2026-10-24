@@ -1,7 +1,7 @@
 # K2K Packet Desktop
 
 ![Vibe Coded](https://img.shields.io/badge/vibe--coded-yes-ff69b4)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-red.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Josh-kk6sen/k2k-packet-desktop?label=download&color=238636)](https://github.com/Josh-kk6sen/k2k-packet-desktop/releases/latest)
 
 A cross-platform **KISS packet radio terminal** for Windows and Linux — matching the look and feel of the K2K Packet Android app.
@@ -80,4 +80,4 @@ Release artifacts on tag pushes; see `.github/workflows/release.yml`.
 
 ## License
 
-[MIT](LICENSE) © Josh / KK6SEN
+[GPL-3.0](LICENSE) © Josh / KK6SEN
