@@ -69,6 +69,18 @@ pub fn append_log(kind: &str, text: &str) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Single-instance: a second launch focuses the existing window
+        // instead of spawning a second process. Two app instances writing
+        // settings.json is a realistic settings-wipe race (both load, one
+        // window-state save overwrites the other's merge), and the frontend
+        // window-state writer makes clicks on stale shortcuts observable.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_shell::init())
         .manage(session::AppState::new())
         .invoke_handler(tauri::generate_handler![
@@ -123,7 +135,7 @@ pub fn run() {
                 if old_base == data_base {
                     continue;
                 }
-                for f in ["settings.json", "history.json", "pbbs_data.json", "pbbs_data.json.bak"] {
+                for f in ["settings.json", "settings.json.bak", "history.json", "pbbs_data.json", "pbbs_data.json.bak"] {
                     let src = old_base.join(f);
                     let dst = data_base.join(f);
                     if src.exists() && !dst.exists() {

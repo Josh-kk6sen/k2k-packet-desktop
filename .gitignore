@@ -3,7 +3,7 @@ node_modules/
 target/
 src-tauri/target/
 www/
-dist/
+dist/assets/*.js.map
 
 # Backups (no longer needed once we have git)
 backup*/

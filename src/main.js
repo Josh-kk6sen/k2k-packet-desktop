@@ -12,8 +12,7 @@
 // loaded — it exists only in git history from before the Framework 3 port.
 //
 // CSS NOTE: the LIVE stylesheet is the inline <style> block inside index.html
-// (~35KB). src/styles/main.css is a synced reference copy of the same CSS —
-// it is NOT imported here, so keep the two in sync when editing styles.
+// — it is the only stylesheet; there is no separate src/styles file.
 
 import "./logging";
 import "./pbbs";

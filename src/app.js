@@ -61,15 +61,15 @@ let rawKissEntries = [];    // raw-KISS display entries
 const unprotoFrames = [];    // all received unproto frames (display model)
 
 const DEFAULT_SETTINGS = {
-  callsign: "", ssid: 0, host: "", port: 8001, autoConnect: true,
+  callsign: "", host: "", port: 8001, autoConnect: true,
   kissP: 63, kissSlotTime: 10, kissTxdelay: 30, kissT1Ms: 1e4, kissT2Ms: 1e3,
   kissT3Ms: 3e5, kissKaCheckMs: 6e4, kissN2Max: 5,
   messageBoardEnabled: false, messageBoardCallsign: "", messageBoardSsid: 1,
   messageBoardSysops: "", messageBoardPrivacy: false,
   messageBoardPublicAliases: "ALL", messageBoardMaxPacketSize: 250,
-  theme: "dark", maxLines: 500, aprsFilter: false,
+  theme: "dark", maxLines: 500,
   beaconEnabled: false, beacon: "", beaconInterval: 240, beaconDest: "BEACON", beaconVia: "",
-  appFontSize: 15, connFontSize: 14, unprotoFontSize: 14,
+  appFontSize: 18, connFontSize: -2, unprotoFontSize: -2,
   rawKissDisplay: false, debugTxEnabled: true, deduplicatePackets: false,
   simpleUnproto: false, onlyUnproto: false, hideVia: false,
   unprotoIgnoredDestinations: "NODES BEACON ID", unprotoTo: "", unprotoVia: "",
@@ -403,8 +403,6 @@ function renderUnproto() {
     } else {
       out += `<div class="u-header"><span class="h-time">${esc(entry.ts)}</span> <span class="h-src">${esc(entry.src)}</span> <span class="h-meta">${esc(entry.dst || "")} ${esc(ft)}</span></div>`;
     }
-    const isBcast = ft.startsWith("UI") && ["NODES", "BEACON", "ID", "MAIL", "INFO", "USERS", "STATUS"].includes(entry.dst.toUpperCase());
-    const isAprs = ft.startsWith("UI") && entry.payload.match(/^[!\`\/]|^[A-Z]{3,6}\d:/);
     const ctrlFrames = ["SABM+", "SABM-", "UA+", "UA-", "DISC+", "DISC-", "DM+", "DM-", "FRMR+", "FRMR-", "SABME+", "SABME-", "RR", "RNR", "REJ", "SREJ", "XID+", "XID-"];
     const lines = entry.payload.split(/[\r\n]+/).filter((l) => l.length > 0);
     if (lines.length > 0 && !ctrlFrames.includes(ft)) {
@@ -549,11 +547,49 @@ async function sendUnproto() {
 }
 
 // ── Settings load / save ──
+// Mirror of the Rust-side migration in settings.rs: stored font fields can be
+// legacy absolute px (≤0.11.17) or the experiment-round offsets. Normalize so
+// the browser preview (whose shim bypasses Rust) behaves exactly like the real
+// app: app = absolute px 10-25 (old offset ≤5 → default 18); conn/unproto =
+// offsets -5..+5 (legacy px p → offset p - base, so it renders the same).
+function normalizeFontSettings(s) {
+  const a = s.appFontSize ?? 18;
+  s.appFontSize = a <= 5 ? 18 : Math.min(25, Math.max(10, a));
+  const base = s.appFontSize;
+  const norm = (v, fallback) => {
+    const n = v ?? fallback;
+    return n > 5 ? n - base : Math.min(5, Math.max(-5, n));
+  };
+  s.connFontSize = norm(s.connFontSize, -2);
+  s.unprotoFontSize = norm(s.unprotoFontSize, -2);
+  return s;
+}
+
 function applyFontsAndTheme() {
-  if (settings.appFontSize) document.documentElement.style.setProperty("--app-font-size", settings.appFontSize + "px");
-  if (settings.connFontSize) document.documentElement.style.setProperty("--conn-font-size", settings.connFontSize + "px");
-  if (settings.unprotoFontSize) document.documentElement.style.setProperty("--unproto-font-size", settings.unprotoFontSize + "px");
+  // App Font Size is an absolute px base (10-25). The whole chrome (topbar,
+  // buttons, badges, tabs, dialogs — everything not pane-specific) derives
+  // from --app-font-size via em units. Connected-mode and Unproto panes are
+  // OFFSETS (-5..+5) from that base: base 18 + -2 → 16px, and when the base
+  // moves they ride along (base 20 + -2 → 18px). So one "bigness" knob
+  // scales everything, and the two pane knobs fine-tune each pane relative
+  // to it. Rendered sizes are clamped 8-30 so extreme combos stay legible.
+  const BASE_DEFAULT = 18; // settings.rs default base px
+  const clampPx = (v) => Math.min(30, Math.max(8, v));
+  const base = Math.min(25, Math.max(10, settings.appFontSize || BASE_DEFAULT));
+  const conn = clampPx(base + (settings.connFontSize ?? -2));
+  const unproto = clampPx(base + (settings.unprotoFontSize ?? -2));
+  const px = (v) => Math.round(v) + "px";
+  document.documentElement.style.setProperty("--app-font-size", px(base));
+  document.documentElement.style.setProperty("--conn-font-size", px(conn));
+  document.documentElement.style.setProperty("--unproto-font-size", px(unproto));
   document.documentElement.setAttribute("data-theme", settings.theme === "dark" ? "" : settings.theme || "");
+  // Live hints in the settings modal: offset → rendered px
+  const hint = (id, offset, rendered) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = "(" + (offset > 0 ? "+" : "") + offset + " → " + rendered + "px)";
+  };
+  hint("conn-fontsize-hint", settings.connFontSize ?? -2, conn);
+  hint("unproto-fontsize-hint", settings.unprotoFontSize ?? -2, unproto);
 }
 
 function applyPanelVisibility() {
@@ -566,7 +602,7 @@ function applyPanelVisibility() {
 async function loadSettings() {
   try {
     const t = await invoke("load_settings");
-    settings = t;
+    settings = normalizeFontSettings(t);
     settings.unprotoColors = void 0;
     if (t.callsign) hostEl.placeholder = t.callsign;
     if (t.host) hostEl.value = t.host;
@@ -671,14 +707,14 @@ const SETTING_FIELDS = [
     pull: (el) => el.value.toUpperCase() || "",
     push: (el, v) => { el.value = v || ""; } },
   { id: "set-app-fontsize", key: "appFontSize",
-    pull: (el) => parseInt(el.value) || 13,
-    push: (el, v) => { el.value = v || 13; } },
+    pull: (el) => Math.min(25, Math.max(10, parseInt(el.value, 10) || 18)),
+    push: (el, v) => { el.value = v ?? 18; } },
   { id: "set-conn-fontsize", key: "connFontSize",
-    pull: (el) => Math.min(25, Math.max(8, parseInt(el.value) || 12)),
-    push: (el, v) => { el.value = v || 12; } },
+    pull: (el) => { const v = parseInt(el.value, 10); return Number.isNaN(v) ? -2 : Math.min(5, Math.max(-5, v)); },
+    push: (el, v) => { el.value = v ?? -2; } },
   { id: "set-unproto-fontsize", key: "unprotoFontSize",
-    pull: (el) => Math.min(25, Math.max(8, parseInt(el.value) || 11)),
-    push: (el, v) => { el.value = v || 11; } },
+    pull: (el) => { const v = parseInt(el.value, 10); return Number.isNaN(v) ? -2 : Math.min(5, Math.max(-5, v)); },
+    push: (el, v) => { el.value = v ?? -2; } },
   { id: "set-rawkiss", key: "rawKissDisplay",
     pull: (el) => el.checked,
     push: (el, v) => { el.checked = !!v; } },

@@ -30,8 +30,7 @@
 })(document);
 
 // Apply the port + KISS-settings visibility defaults for the chosen protocol
-// (AGWPE → 8000/hidden, KISS/APRS → 8001/visible — APRS rides unconnected UI
-// frames over the same KISS TNC path).
+// (AGWPE → 8000/hidden, KISS → 8001/visible).
 window.applyProtocolDefaults = function () {
   var sel = document.getElementById("set-protocol");
   var port = document.getElementById("set-port");

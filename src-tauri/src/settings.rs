@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri::Manager;
 
@@ -45,9 +46,9 @@ pub struct AppSettings {
     pub beacon_via: String,                  // digipeater path for beacon
     pub font_size: u32,                      // UI font size in px (legacy)
     pub mon_font_size: u32,                  // Monitor font size in px (legacy)
-    pub app_font_size: u32,                  // App font size in px
-    pub conn_font_size: u32,                 // Connected mode font size in px
-    pub unproto_font_size: u32,              // Unproto font size in px
+    pub app_font_size: u32,                  // App base font size in px (10-25)
+    pub conn_font_size: i32,                 // Connected mode OFFSET (-5..+5) from app base
+    pub unproto_font_size: i32,              // Unproto OFFSET (-5..+5) from app base
     pub raw_kiss_display: bool,
     pub debug_tx_enabled: bool,
     pub deduplicate_packets: bool,
@@ -100,9 +101,9 @@ impl Default for AppSettings {
             beacon_via: String::new(),
             font_size: 13,
             mon_font_size: 11,
-            app_font_size: 15,
-            conn_font_size: 14,
-            unproto_font_size: 14,
+            app_font_size: 18,
+            conn_font_size: -2,
+            unproto_font_size: -2,
             raw_kiss_display: false,
             debug_tx_enabled: false,
             deduplicate_packets: false,
@@ -160,25 +161,50 @@ pub fn clamp_beacon_interval(s: &mut AppSettings) {
     s.beacon_interval = s.beacon_interval.max(1);
 }
 
-/// Load settings from disk (returns None if no file exists).
-/// Clamps font sizes to safe ranges (8-25) and AX.25 timers to safe
-/// minimums on load to guard against malformed settings.json or manual
+/// Load settings from disk (returns None if no usable file exists).
+/// Self-healing: a missing or corrupt settings.json falls back to the
+/// atomic-writer's orphaned `settings.json.tmp`, then to `settings.json.bak`
+/// (written on every save), and a recovered copy is promoted back to the
+/// main file. Clamps font sizes to safe ranges (8-25) and AX.25 timers to
+/// safe minimums on load to guard against malformed settings.json or manual
 /// editing mistakes.
 pub fn load_settings_from_disk(app: &AppHandle) -> Result<Option<AppSettings>, String> {
     let path = crate::storage::app_data_path(app, "settings.json");
+    load_settings_from_path(&path)
+}
+
+/// Read + sanitize ONE settings file. `Ok(None)` = file absent;
+/// `Err` = present but unreadable/unparseable. No fallbacks, no side effects.
+fn parse_settings_file(path: &std::path::Path) -> Result<Option<AppSettings>, String> {
     if !path.exists() {
         return Ok(None);
     }
-    let data = fs::read_to_string(&path).map_err(|e| format!("Failed to read settings: {}", e))?;
+    let data = fs::read_to_string(path).map_err(|e| format!("Failed to read settings: {}", e))?;
     let mut json: serde_json::Value =
         serde_json::from_str(&data).map_err(|e| format!("Failed to parse settings: {e}"))?;
     default_missing_unproto_destinations(&mut json);
     let mut settings: AppSettings =
         serde_json::from_value(json).map_err(|e| format!("Failed to parse settings: {e}"))?;
-    // Clamp font sizes to safe range — guards against malformed settings.json
-    settings.app_font_size = settings.app_font_size.clamp(8, 25);
-    settings.conn_font_size = settings.conn_font_size.clamp(8, 25);
-    settings.unproto_font_size = settings.unproto_font_size.clamp(8, 25);
+    // Clamp font sizes to safe range — guards against malformed settings.json.
+    // app_font_size is an absolute px (10-25). conn/unproto are OFFSETS
+    // (-5..+5) from the app base. Legacy settings.json files (≤0.11.17)
+    // stored absolute px for all three (defaults 15/14/14) — convert those
+    // to offsets (px 14 → offset −2) before clamping.
+    let a = settings.app_font_size;
+    settings.app_font_size = if a <= 5 { 18 } else { a.clamp(10, 25) };
+    let base = (settings.app_font_size as i32); // anchor legacy px → offset
+    settings.conn_font_size = if settings.conn_font_size > 5 {
+        settings.conn_font_size - base
+    } else {
+        settings.conn_font_size
+    }
+    .clamp(-5, 5);
+    settings.unproto_font_size = if settings.unproto_font_size > 5 {
+        settings.unproto_font_size - base
+    } else {
+        settings.unproto_font_size
+    }
+    .clamp(-5, 5);
     clamp_ax25_timers(&mut settings);
     clamp_beacon_interval(&mut settings);
     // New-field upgrade guard: a 0.9.38 settings.json lacks the key, which
@@ -189,6 +215,44 @@ pub fn load_settings_from_disk(app: &AppHandle) -> Result<Option<AppSettings>, S
     sanitize_unproto_colors(&mut settings.unproto_colors);
     sanitize_message_board(&mut settings);
     Ok(Some(settings))
+}
+
+/// Load settings from a concrete path, self-healing from the .tmp / .bak
+/// siblings. `Ok(None)` only when nothing usable exists anywhere → fresh
+/// install. `Err` only when a main file exists but every copy is corrupt.
+fn load_settings_from_path(path: &std::path::Path) -> Result<Option<AppSettings>, String> {
+    // Fast path: main file parses.
+    if let Ok(Some(s)) = parse_settings_file(path) {
+        return Ok(Some(s));
+    }
+    // Main missing/corrupt — the atomic writer's orphaned .tmp holds the
+    // newest full content (crash between write and rename), else the .bak
+    // from the previous save.
+    let tmp = path.with_extension("json.tmp");
+    let bak = PathBuf::from(format!("{}.bak", path.display()));
+    for (label, cand) in [("tmp", &tmp), ("bak", &bak)] {
+        let Ok(Some(s)) = parse_settings_file(cand) else { continue };
+        crate::append_log(
+            "settings",
+            &format!(
+                "self-heal: settings.json {} — restored from .{}",
+                if path.exists() { "corrupt" } else { "missing" },
+                label
+            ),
+        );
+        // Promote the good copy back to the main file. Must NOT go through
+        // save_settings_to_disk — its .bak-copy-first step would copy the
+        // still-corrupt main over the only good backup (Python-parity rule).
+        if let Err(e) = crate::storage::write_json_file(&path.to_path_buf(), &s, "settings") {
+            crate::append_log("settings", &format!("self-heal promote failed: {e}"));
+        }
+        return Ok(Some(s));
+    }
+    if path.exists() {
+        Err("Failed to parse settings: main, .tmp, and .bak all unreadable".to_string())
+    } else {
+        Ok(None)
+    }
 }
 
 /// Missing-key default for `unprotoIgnoredDestinations`.
@@ -293,7 +357,14 @@ pub fn beacon_configured(settings: &AppSettings) -> bool {
         && !settings.beacon_dest.trim().is_empty()
 }
 
-/// Sync save window state (called synchronously on window close)
+/// Sync save window state (called synchronously on window close).
+///
+/// Safety rule: only ever save window state by *merging* onto settings that
+/// actually loaded from disk. If settings.json is missing, locked, or
+/// unparseable for ANY reason, skip the save entirely — writing defaults
+/// here was the bug that wiped user settings: a transient read hiccup
+/// degraded to `AppSettings::default()` and the save then overwrote the
+/// real file with defaults + window state.
 pub fn save_window_state_sync(
     app: &AppHandle,
     width: u32,
@@ -302,7 +373,13 @@ pub fn save_window_state_sync(
     y: i32,
     maximized: bool,
 ) -> Result<(), String> {
-    let mut existing = load_settings_or_default(app);
+    let mut existing = match load_settings_from_disk(app) {
+        Ok(Some(s)) => s,
+        // Missing file on a fresh install, or unreadable file: do NOT
+        // fabricate defaults and write them over disk. Window position is
+        // not worth losing settings over.
+        _ => return Ok(()),
+    };
     existing.window_width = Some(width);
     existing.window_height = Some(height);
     existing.window_x = Some(x);
@@ -313,7 +390,22 @@ pub fn save_window_state_sync(
 
 fn save_settings_to_disk(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
     let path = crate::storage::app_data_path(app, "settings.json");
-    crate::storage::write_json_file(&path, settings, "settings")
+    save_settings_to_path(&path, settings)
+}
+
+/// Persist settings at a concrete path: rotate a valid main file to .bak,
+/// then write atomically (tmp + rename).
+fn save_settings_to_path(path: &std::path::Path, settings: &AppSettings) -> Result<(), String> {
+    // .bak copy first (Python/BBS parity): the previous good settings survive
+    // a crash/corruption mid-save, and load_settings_from_path self-heals
+    // from it. Only rotate when the current main file is VALID — a corrupt
+    // main (if we somehow reach a save without the load-path healing it)
+    // must never clobber the only good backup.
+    if path.exists() && parse_settings_file(path).is_ok_and(|v| v.is_some()) {
+        let bak = PathBuf::from(format!("{}.bak", path.display()));
+        let _ = std::fs::copy(path, &bak);
+    }
+    crate::storage::write_json_file(&path.to_path_buf(), settings, "settings")
 }
 
 /// Setup-time restore: read settings and apply window geometry
@@ -697,5 +789,120 @@ mod tests {
         let mut d = AppSettings::default();
         clamp_beacon_interval(&mut d);
         assert_eq!(d.beacon_interval, 240, "valid default passes through");
+    }
+
+    // ── .bak / .tmp self-healing ─────────────────────────────
+
+    fn temp_settings_path(name: &str) -> std::path::PathBuf {
+        static SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "k2k-settings-test-{}-{}-{name}.json",
+            std::process::id(),
+            n
+        ))
+    }
+
+    fn cleanup(path: &std::path::Path) {
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(format!("{}.bak", path.display()));
+        let _ = std::fs::remove_file(path.with_extension("json.tmp"));
+    }
+
+    /// A corrupt main file must recover from the .bak written on the previous
+    /// save, and the recovered data must be promoted back to the main file.
+    /// The .bak is ALWAYS one save behind (first save has no backup), so the
+    /// recovered settings are the last-good version.
+    #[test]
+    fn corrupt_main_recovers_from_bak() {
+        let path = temp_settings_path("corrupt_main_recovers_from_bak");
+        cleanup(&path);
+
+        // Save #1: main only (no bak on the very first save — Python parity).
+        let mut s = AppSettings::default();
+        s.callsign = "KK6SEN".into();
+        s.host = "192.168.1.1".into();
+        save_settings_to_path(&path, &s).expect("save #1");
+
+        // Save #2 rotates main → .bak, so the backup now holds save #1.
+        s.callsign = "W6ABC".into();
+        s.theme = "sepia".into();
+        save_settings_to_path(&path, &s).expect("save #2");
+
+        // Corrupt the main file.
+        std::fs::write(&path, "{ definitely not json").expect("corrupt the main file");
+
+        // Load must fall back to .bak and return the last GOOD save (#1).
+        let loaded = load_settings_from_path(&path).expect("load").expect("some");
+        assert_eq!(loaded.callsign, "KK6SEN");
+        assert_eq!(loaded.host, "192.168.1.1");
+
+        // And the main file must have been healed back to valid JSON.
+        let healed = parse_settings_file(&path).expect("healed").expect("some");
+        assert_eq!(healed.callsign, "KK6SEN");
+        cleanup(&path);
+    }
+
+    /// A MISSING main file (crash in the remove+rename window) must recover
+    /// from the orphaned .tmp that the atomic writer leaves behind.
+    #[test]
+    fn missing_main_recovers_from_tmp() {
+        let path = temp_settings_path("missing_main_recovers_from_tmp");
+        cleanup(&path);
+
+        let mut s = AppSettings::default();
+        s.callsign = "KK6SEN".into();
+        s.host = "192.168.1.1".into();
+        // Simulate a crash mid-atomic-write: only the .tmp exists (the rename
+        // never happened), main is gone.
+        std::fs::write(
+            path.with_extension("json.tmp"),
+            serde_json::to_string_pretty(&s).unwrap(),
+        )
+        .expect("write tmp");
+
+        let loaded = load_settings_from_path(&path).expect("load").expect("some");
+        assert_eq!(loaded.callsign, "KK6SEN");
+        assert_eq!(loaded.host, "192.168.1.1");
+        assert!(path.exists(), "recovered settings must be promoted to main");
+        cleanup(&path);
+    }
+
+    /// With NO main, .tmp, or .bak, load reports None — the fresh-install
+    /// path — instead of fabricating defaults.
+    #[test]
+    fn nothing_on_disk_reports_none() {
+        let path = temp_settings_path("nothing_on_disk_reports_none");
+        cleanup(&path);
+        assert!(load_settings_from_path(&path).unwrap().is_none());
+        cleanup(&path);
+    }
+
+    /// Every save rotates a *valid* main file to .bak. And a corrupt main
+    /// must never clobber a good .bak (the load path may not have healed
+    /// yet when a save fires).
+    #[test]
+    fn bak_rotation_preserves_good_backup() {
+        let path = temp_settings_path("bak_rotation_preserves_good_backup");
+        cleanup(&path);
+
+        let mut s = AppSettings::default();
+        s.callsign = "KK6SEN".into();
+        save_settings_to_path(&path, &s).expect("save #1");
+        assert!(!path.exists() || parse_settings_file(&path).is_ok_and(|v| v.is_some()));
+
+        // A second save rotates the good main to bak.
+        s.callsign = "W6ABC".into();
+        save_settings_to_path(&path, &s).expect("save #2");
+        let bak = format!("{}.bak", path.display());
+        let bak_txt = std::fs::read_to_string(&bak).expect("read bak");
+        assert!(bak_txt.contains("KK6SEN"), "bak must hold the prior save");
+
+        // Now corrupt the main and save again — the GOOD bak must survive.
+        std::fs::write(&path, "garbage").expect("corrupt main");
+        save_settings_to_path(&path, &s).expect("save #3 over corrupt main");
+        let bak_txt = std::fs::read_to_string(&bak).expect("read bak again");
+        assert!(bak_txt.contains("KK6SEN"), "corrupt main must not clobber good bak");
+        cleanup(&path);
     }
 }

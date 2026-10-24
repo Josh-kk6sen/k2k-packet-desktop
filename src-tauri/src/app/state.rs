@@ -20,9 +20,16 @@ pub struct AppCore {
     /// Live PBBS admin-console session. Holds the in-RAM BBS session state
     /// (pending destination, current command step) across `pbbs_admin_*`
     /// calls. Connection-independent: the admin console is a LOCAL, no-RF
-    /// console, so it does not require a connected TNC — the board store is
-    /// loaded fresh from settings each open/send (it persists to disk).
+    /// console, so it does not require a connected TNC.
     pub admin_bbs: Option<crate::bbs::BbsSession>,
+    /// The admin console's board store. MUST be held across `pbbs_admin_send`
+    /// calls alongside the session: the kernel increments `next_id` when the
+    /// SUBJECT line is entered, and stores the message at `/EX` — if the store
+    /// were reloaded from disk between those two calls (as it was), every
+    /// message reused id 1 and `next_id` never advanced on disk. Refresh from
+    /// disk only when the console is idle (at the command menu) so RF-side
+    /// board activity shows up — never while a message is being composed.
+    pub admin_bbs_store: Option<crate::bbs::BbsStore>,
 }
 
 impl AppCore {
@@ -30,6 +37,7 @@ impl AppCore {
         Self {
             connections: Vec::new(),
             admin_bbs: None,
+            admin_bbs_store: None,
         }
     }
     /// True when the named connection is an AGWPE (Direwolf) link.

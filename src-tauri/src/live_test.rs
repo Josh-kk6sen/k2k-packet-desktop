@@ -74,12 +74,10 @@ fn live_lock() -> std::sync::MutexGuard<'static, ()> {
 struct SimLink {
     sock: TcpStream,
     buf: Vec<u8>,
-    my_call: String,
-    my_ssid: u8,
 }
 
 impl SimLink {
-    fn connect(my_call: &str, my_ssid: u8) -> Option<Self> {
+    fn connect() -> Option<Self> {
         let stream = TcpStream::connect_timeout(
             &SIM.to_socket_addrs().ok()?.next()?,
             Duration::from_secs(2),
@@ -90,8 +88,6 @@ impl SimLink {
         Some(Self {
             sock: stream,
             buf: Vec::new(),
-            my_call: my_call.to_string(),
-            my_ssid,
         })
     }
 
@@ -172,7 +168,7 @@ fn is_dm(ctl: u8) -> bool {
 #[test]
 fn live_bbs0_connect_receive_and_disconnect() {
     let _lock = live_lock();
-    let mut link = match SimLink::connect(MY_CALL, MY_SSID) {
+    let mut link = match SimLink::connect() {
         Some(l) => l,
         None => {
             eprintln!("[k2k-live] SKIPPED: kiss-sim not reachable on {SIM}");
@@ -250,7 +246,7 @@ fn live_bbs0_connect_receive_and_disconnect() {
 #[test]
 fn live_unconnected_gets_dm() {
     let _lock = live_lock();
-    let mut link = match SimLink::connect(MY_CALL, MY_SSID) {
+    let mut link = match SimLink::connect() {
         Some(l) => l,
         None => {
             eprintln!("[k2k-live] SKIPPED: kiss-sim not reachable on {SIM}");
@@ -280,7 +276,7 @@ fn live_unconnected_gets_dm() {
 #[test]
 fn live_direct_node_reply() {
     let _lock = live_lock();
-    let mut link = match SimLink::connect(MY_CALL, MY_SSID) {
+    let mut link = match SimLink::connect() {
         Some(l) => l,
         None => {
             eprintln!("[k2k-live] SKIPPED: kiss-sim not reachable on {SIM}");
@@ -309,7 +305,7 @@ fn live_direct_node_reply() {
 #[test]
 fn live_never_responds_stays_silent() {
     let _lock = live_lock();
-    let mut link = match SimLink::connect(MY_CALL, MY_SSID) {
+    let mut link = match SimLink::connect() {
         Some(l) => l,
         None => {
             eprintln!("[k2k-live] SKIPPED: kiss-sim not reachable on {SIM}");
@@ -327,7 +323,7 @@ fn live_never_responds_stays_silent() {
 #[test]
 fn live_digipeater_path_carries_back() {
     let _lock = live_lock();
-    let mut link = match SimLink::connect(MY_CALL, MY_SSID) {
+    let mut link = match SimLink::connect() {
         Some(l) => l,
         None => {
             eprintln!("[k2k-live] SKIPPED: kiss-sim not reachable on {SIM}");
@@ -365,8 +361,8 @@ fn live_multicast_ui_reaches_all_clients() {
         eprintln!("[k2k-live] SKIPPED: kiss-sim not reachable on {SIM}");
         return;
     }
-    let mut c1 = SimLink::connect("K2KMCA", 1).expect("client 1");
-    let mut c2 = SimLink::connect("K2KMCB", 2).expect("client 2");
+    let mut c1 = SimLink::connect().expect("client 1");
+    let mut c2 = SimLink::connect().expect("client 2");
 
     // Give the sim's per-connection server threads a moment to register both
     // sockets before we broadcast (the panel only delivers to sockets it has
@@ -416,10 +412,10 @@ fn live_error_injection_drop_clears() {
         "/api/inject",
         "{\"action\":\"drop\",\"targets\":[\"BBS0\"],\"every\":1}",
     );
-    assert!(add.unwrap_or_default().contains("\"ok\":true") || true, ""); // rule accepted
+    assert!(panel_ok(add), "rule accepted");
 
     // Connect → sim sends UA then banner, but the drop rule should suppress them.
-    let mut link = SimLink::connect("K2KDROP", 9).unwrap();
+    let mut link = SimLink::connect().unwrap();
     link.tx(&build_sabm("BBS0", 0, "K2KDROP", 9, &[]));
     let frames = link.collect_frames(Duration::from_secs(2));
     assert!(
@@ -429,7 +425,7 @@ fn live_error_injection_drop_clears() {
 
     // Clear live rules → a fresh connect gets through.
     panel_post("/api/inject/clear", "");
-    let mut link2 = SimLink::connect("K2KDROP", 9).unwrap();
+    let mut link2 = SimLink::connect().unwrap();
     link2.tx(&build_sabm("BBS0", 0, "K2KDROP", 9, &[]));
     let frames2 = link2.collect_frames(Duration::from_secs(3));
     assert!(

@@ -806,6 +806,42 @@ mod tests {
         assert!(store.data_path.exists());
     }
 
+    /// Admin-console contract (the all-messages-#1 bug): the store is held
+    /// across pbbs_admin_send calls, so a SECOND message composed in the
+    /// SAME session/store must get id 2 — never reuse id 1 — and next_id
+    /// must advance to 3. Regression: the admin console reloaded the store
+    /// from disk between calls, discarding the subject-line next_id
+    /// increment so every message landed as id 1.
+    #[test]
+    fn sequential_messages_increment_ids_never_reuse() {
+        let mut store = tmp_store("idseq");
+        let mut sess = BbsSession::new("KK6SEN");
+
+        // Message 1
+        sess.handle_line("S K6ABC", &mut store, &test_config());
+        sess.handle_line("First", &mut store, &test_config());
+        let r1 = sess.handle_line("/EX", &mut store, &test_config());
+        assert_eq!(r1.lines, vec!["MESSAGE SAVED to # 1".to_string()]);
+
+        // Message 2 — same session, same held store (as the admin console
+        // does after the fix)
+        let r2 = sess.handle_line("S W7XYZ", &mut store, &test_config());
+        assert_eq!(r2.lines, vec!["SUBJECT: ".to_string()]);
+        sess.handle_line("Second", &mut store, &test_config());
+        let r3 = sess.handle_line("/EX", &mut store, &test_config());
+        assert_eq!(r3.lines, vec!["MESSAGE SAVED to # 2".to_string()]);
+
+        // And a third — ids must be unique and strictly increasing.
+        sess.handle_line("S N0CALL", &mut store, &test_config());
+        sess.handle_line("Third", &mut store, &test_config());
+        let r4 = sess.handle_line("/EX", &mut store, &test_config());
+        assert_eq!(r4.lines, vec!["MESSAGE SAVED to # 3".to_string()]);
+
+        let ids: Vec<u32> = store.data.messages.iter().map(|m| m.id).collect();
+        assert_eq!(ids, vec![1, 2, 3], "message ids must increment, never reuse");
+        assert_eq!(store.data.next_id, 4);
+    }
+
     #[test]
     fn send_with_no_subject_and_no_dest() {
         let mut store = tmp_store("sendnaked");

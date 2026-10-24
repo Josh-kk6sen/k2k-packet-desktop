@@ -2144,29 +2144,42 @@ pub struct PbbsAdminView {
     pub hangup: bool,
 }
 
-/// Load a board store + config fresh from current settings, and ensure the
-/// shared admin-console session (`AppCore::admin_bbs`) is ready. This is the
-/// LOCAL, no-RF admin console — it does NOT require a connected TNC; the
-/// board data lives on disk, so an enabled board in Settings is enough.
-/// Returns `(admin session ref, store, cfg, operator callsign)`.
+/// Load a board config fresh from current settings, and ensure the shared
+/// admin-console session (`AppCore::admin_bbs`) AND its board store
+/// (`AppCore::admin_bbs_store`) are ready. This is the LOCAL, no-RF admin
+/// console — it does NOT require a connected TNC; the board data lives on
+/// disk, so an enabled board in Settings is enough.
+///
+/// The store is refreshed from disk ONLY when the console is idle (at the
+/// command menu) or has none yet. A message being composed (Subject/Body
+/// mode) MUST keep the same in-memory store: the kernel advances `next_id`
+/// when the SUBJECT line is entered and only persists it when `/EX` saves —
+/// reloading mid-compose discards that increment, so every message reuses
+/// id 1 and `next_id` never moves on disk.
+///
+/// Returns `(admin session ref, admin store ref, cfg, operator callsign)`.
 async fn ensure_admin_console<'a>(
     core: &'a mut crate::app::state::AppCore,
     app_handle: &tauri::AppHandle,
-) -> Result<(&'a mut Option<crate::bbs::BbsSession>, crate::bbs::BbsStore, crate::bbs::BbsConfig, String), String> {
+) -> Result<(&'a mut Option<crate::bbs::BbsSession>, &'a mut Option<crate::bbs::BbsStore>, crate::bbs::BbsConfig, String), String> {
     let s = crate::settings::load_settings_or_default(app_handle);
     let setup = crate::bbs_link::BbsSetup::from_settings(&s, &out_handle(app_handle).data_dir());
     if !setup.enabled {
         return Err("Message board is not enabled — enable it in Settings first".to_string());
     }
-    let store = setup
-        .store
-        .ok_or_else(|| "Message board store not loaded".to_string())?;
+    let idle = core
+        .admin_bbs
+        .as_ref()
+        .is_none_or(|sess| sess.at_command());
+    if idle || core.admin_bbs_store.is_none() {
+        core.admin_bbs_store = setup.store;
+    }
     let operator = if s.callsign.trim().is_empty() {
         "N0CALL".to_string()
     } else {
         s.callsign.trim().to_uppercase()
     };
-    Ok((&mut core.admin_bbs, store, setup.cfg, operator))
+    Ok((&mut core.admin_bbs, &mut core.admin_bbs_store, setup.cfg, operator))
 }
 
 /// Open the admin console: ALWAYS starts a fresh session (like the Clear
@@ -2189,12 +2202,20 @@ pub async fn pbbs_admin_reset(
     app_handle: tauri::AppHandle,
 ) -> Result<PbbsAdminView, String> {
     let mut core = state.core.lock().await;
+    // Clear = reload the board from disk: drop the held store so
+    // ensure_admin_console loads a fresh snapshot for the new session.
+    // (A stale held store would show an outdated banner/message list.)
+    core.admin_bbs_store = None;
     let (admin_bbs, store, cfg, operator) =
         ensure_admin_console(&mut core, &app_handle).await?;
     *admin_bbs = Some(crate::bbs::BbsSession::new(&operator));
     let sess = admin_bbs.as_ref().unwrap();
     let mut lines = Vec::new();
-    lines.extend(sess.connect_output(&store, &cfg));
+    // The store may be None only transiently (disabled board returns Err
+    // above); treat it as an empty board rather than panicking.
+    if let Some(store) = store.as_ref() {
+        lines.extend(sess.connect_output(store, &cfg));
+    }
     lines.push(sess.prompt(&cfg));
     Ok(PbbsAdminView {
         lines,
@@ -2213,14 +2234,21 @@ pub async fn pbbs_admin_send(
     line: String,
 ) -> Result<PbbsAdminView, String> {
     let mut core = state.core.lock().await;
-    let (admin_bbs, mut store, cfg, operator) =
+    let (admin_bbs, store, cfg, operator) =
         ensure_admin_console(&mut core, &app_handle).await?;
     if admin_bbs.is_none() {
         *admin_bbs = Some(crate::bbs::BbsSession::new(&operator));
     }
     let reply = {
         let sess = admin_bbs.as_mut().unwrap();
-        sess.handle_line(&line, &mut store, &cfg)
+        // The store is held across calls (see ensure_admin_console), so a
+        // message compose — SUBJECT line increments next_id, /EX saves —
+        // happens against ONE store instance. Without it every message
+        // reused id 1 (the all-messages-#1 bug).
+        let Some(store) = store.as_mut() else {
+            return Err("Message board store not loaded".to_string());
+        };
+        sess.handle_line(&line, store, &cfg)
     };
     let mut lines = reply.lines;
     if reply.hangup {
