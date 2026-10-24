@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "host": "vite",
-    "test:frontend": "node tests/frontend/smoke_test.mjs"
+    "test:frontend": "node tests/frontend/smoke_test.mjs",
+    "tauri": "tauri"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
