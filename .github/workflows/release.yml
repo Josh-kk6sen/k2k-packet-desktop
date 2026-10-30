@@ -96,7 +96,7 @@ jobs:
 
   build-macos:
     name: Build macOS .dmg
-    runs-on: macos-14
+    runs-on: macos-15
     if: github.event_name != 'workflow_dispatch' || contains('${{ github.event.inputs.bundles }}', 'dmg') || contains('${{ github.event.inputs.bundles }}', 'all')
     steps:
       - uses: actions/checkout@v4
