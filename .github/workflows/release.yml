@@ -110,13 +110,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Rust toolchain
-        run: rustup update stable && rustup default stable
+      - name: Rust toolchain (both Mac architectures)
+        run: |
+          rustup update stable && rustup default stable
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
-      # Unsigned for now — macOS adds the "unidentified developer" Gatekeeper
-      # warning; users right-click → Open to bypass. Add an Apple cert later
-      # for real signing.
-      - name: Build + package
+      # Ad-hoc signing only (no Apple Developer ID): bundle > macOS >
+      # signingIdentity "-" in tauri.conf.json makes the bundler codesign the
+      # .app, producing _CodeSignature/CodeResources. Without it the bundle is
+      # left unsigned and Gatekeeper reports "damaged, move to Trash".
+      # With ad-hoc signing users get the normal "unidentified developer"
+      # prompt, where System Settings > Privacy & Security > Open Anyway works.
+      - name: Build + package (universal .dmg)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -126,4 +131,4 @@ jobs:
           releaseBody: ""
           releaseDraft: true
           prerelease: false
-          args: --bundles dmg
+          args: --bundles dmg --target universal-apple-darwin
