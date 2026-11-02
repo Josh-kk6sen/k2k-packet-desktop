@@ -1992,7 +1992,7 @@ dependencies = [
 
 [[package]]
 name = "k2k-packet-desktop"
-version = "0.11.21"
+version = "0.11.22"
 dependencies = [
  "chrono",
  "env_logger",

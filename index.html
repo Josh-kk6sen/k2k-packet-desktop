@@ -683,20 +683,28 @@ if(!window.__TAURI_INTERNALS__){
     window.__demoSeed=function(){
       // Last three are the SAME packet heard three times as it walks its
       // route — dedup on keeps one entry and accumulates the * markers.
-      var beacon = "Join the map -  go to https://map.KK6SEN.com";
-      [["KBETH","BEACON","KBETH,KELSO","net cycle 3 heard KBANN KBETH KELSO"],
-       ["KBANN","ID","KBANN","KBANN/R Packet Node"],
-       ["KM6LYW-10","APRS","","!3830.50N/12045.10W- demo packet"],
-       ["AUBNOD","BEACON","KBANN,KJOHN,KBETH,KROCK",beacon],
-       ["AUBNOD","BEACON","KBANN*,KJOHN,KBETH,KROCK",beacon],
-       ["AUBNOD","BEACON","KBANN*,KJOHN*,KBETH*,KROCK",beacon]]
+      // Placeholder callsigns only — no real stations, digis or node names.
+      var beacon = "Sample beacon text - this is demo data, not real traffic";
+      [["N0CALL","BEACON","N0CALL,DIGI1","net cycle 3 heard DIGI1 DIGI2 DIGI3"],
+       ["N0NODE","ID","","N0NODE/R Sample Node"],
+       ["N4TEST-10","APRS","","!0000.00N/00000.00W- demo packet"],
+       ["N0CALL","BEACON","DIGI1,DIGI2,DIGI3,DIGI4",beacon],
+       ["N0CALL","BEACON","DIGI1*,DIGI2,DIGI3,DIGI4",beacon],
+       ["N0CALL","BEACON","DIGI1*,DIGI2*,DIGI3*,DIGI4",beacon]]
       .forEach(function(r,i){
         setTimeout(function(){
           _emit("unproto-frame",{source:r[0],dest:r[1],info:r[3],frame_type:"UI-",radio_header:_hdr(r[0],r[1],r[2]),raw_kiss_data:"",sent:false});
         },i*120);
       });
     };
-    setTimeout(function(){window.__demoSeed()},900);
+    // The app registers its event listeners during module init, which can take
+    // longer than a fixed delay on first load — retry until a frame lands.
+    var _seedTries = 0;
+    (function seedRetry(){
+      if(document.querySelector(".u-entry")) return;
+      window.__demoSeed();
+      setTimeout(function(){ if(!document.querySelector(".u-entry") && ++_seedTries < 8) seedRetry(); }, 700);
+    })();
   }
 }
 </script>
@@ -726,7 +734,7 @@ if(!window.__TAURI_INTERNALS__){
       <button class="settings-btn" id="help-btn" title="How to use">&#63;</button>
       <button class="settings-btn" id="log-btn" title="Open log folder" onclick="openLogDir()">&#128194;</button>
       <button class="settings-btn" id="settings-btn">&#9881;</button>
-      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.21</span>
+      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.22</span>
     </div>
     <script>{!function(){try{if(window.__TAURI__)__TAURI__.app.getVersion().then(function(v){var e=document.getElementById('app-version');if(e)e.textContent='v'+v})}catch(e){}}()}</script>
   </div>
@@ -969,18 +977,18 @@ if(!window.__TAURI_INTERNALS__){
     <div class="h-body">
 
 <h3>Connect</h3>
-<p>Enter your Direwolf TNC's <strong>IP</strong> and <strong>Port</strong> in the top bar, then click <strong>Connect</strong>. The default port is <code>8000</code> for AGW or <code>8001</code> for KISS. Set your callsign in the Settings panel (<span class="key">&#9881;</span> gear icon). The connection status indicator turns green when connected.</p>
+<p>Your callsign, TNC address and port now live in Settings (<span class="key">&#9881;</span> gear icon): set <strong>Callsign</strong>, <strong>Host / IP</strong>, <strong>Port</strong> and <strong>Protocol</strong>. Defaults are <code>8000</code> for AGWPE and <code>8001</code> for KISS — switching Protocol fills the matching port for you. Then click <strong>Connect</strong>: the button itself is the status light — <span style="color:var(--green)">green&nbsp;Connect</span> when idle, <span style="color:var(--red)">red&nbsp;Disconnect</span> when you're on the air. There is no separate status dot any more.</p>
 
 <h3>Connected Mode (C1–C4 Tabs)</h3>
-<p>The four tabs <strong>C1</strong> through <strong>C4</strong> let you run up to four separate connected-mode sessions simultaneously. Click a tab to select it.</p>
+<p>The four tabs <strong>C1</strong> through <strong>C4</strong> let you run up to four separate connected-mode sessions simultaneously. Click a tab to select it — each tab keeps its own transcript, history and state.</p>
 
 <div class="cmd">:c CALLSIGN</div>
-<p>Type <code>:c</code> followed by a callsign and press <span class="key">Enter</span> to initiate a connected-mode session. Optionally fill the <strong>Via</strong> field with digipeaters (space-separated). Example: <code>:c KD7ABC</code> or <code>:c KD7ABC-3</code> with Via: <code>DIGI1 DIGI2</code></p>
+<p>Type <code>:c</code> followed by a callsign and press <span class="key">Enter</span> to initiate a connected-mode session. Optionally fill the <strong>Via</strong> field with digipeaters (space-separated, e.g. <code>DIGI1 DIGI2</code>). Example: <code>:c N0CALL</code> or <code>:c N0CALL-3</code>. Those digis are used for this session and shown in the tab label.</p>
 
 <div class="cmd">:d</div>
 <p>Type <code>:d</code> and press <span class="key">Enter</span> to disconnect the current tab's session.</p>
 
-<p>Once connected, type a message and press <span class="key">Enter</span> to send it. Use <span class="key">Shift+Enter</span> for multi-line messages. Arrow keys navigate your send history.</p>
+<p>Once connected, type a message and press <span class="key">Enter</span> to send it. Use <span class="key">Shift+Enter</span> for multi-line messages. <span class="key">&#8593;</span> / <span class="key">&#8595;</span> walk your send history — <strong>Up starts at the most recently sent line</strong> and goes back from there.</p>
 
 <h3>Unproto Mode (UI Frames)</h3>
 <p>The right panel displays all received and sent unproto (UI) frames. You can transmit unproto frames using the input fields at the bottom:</p>
@@ -989,18 +997,29 @@ if(!window.__TAURI_INTERNALS__){
   <li><strong>Via</strong> — digipeater path (optional, space-separated)</li>
   <li><strong>Message</strong> — the text to send</li>
 </ul>
-<p>Click <strong>Simple Unproto</strong> to toggle simplified header display. Click <strong>Deduplicate Packets</strong> to filter duplicate UI frames from different digipeaters.</p>
+<p><strong>Reuse a path you heard:</strong> click the digi path (the <em>via</em> text) on any received packet and it drops into the <strong>Via</strong> box, cursor ready — no retyping <code>DIGI1,DIGI2</code>. Nothing is remembered until you actually send.</p>
+<p><span class="key">&#8593;</span> / <span class="key">&#8595;</span> in the <strong>Via</strong> and <strong>To</strong> boxes walk the paths and destinations you have <em>sent</em> with, most recent first.</p>
+<p><strong>Simple Unproto</strong> shrinks each header to one compact line — it still shows the <em>whole</em> digi path, not just the first hop.<br>
+<strong>Deduplicate Packets</strong> shows each packet once, and when later copies come in through other digis it marks the digis that already repeated it with <code>*</code> — so <code>DIGI1,DIGI2,DIGI3,DIGI4</code> becomes <code>DIGI1*,DIGI2*,DIGI3*,DIGI4</code> as the repeats are heard. It is only a view: turn it off and every original copy comes back with its own path.<br>
+<strong>Only Unproto</strong> hides the connected-mode panel and gives the whole window to unproto.</p>
 
 <h3>Beacon</h3>
-<p>Set up an automatic beacon in Settings (<span class="key">&#9881;</span>). Enable the beacon, set your beacon text, destination (default <code>BEACON</code>), optional Via path, and interval in minutes. The beacon transmits automatically while connected.</p>
+<p>Set up an automatic beacon in Settings (<span class="key">&#9881;</span>): enable it, then set the beacon text, destination (default <code>BEACON</code>), optional Via path, and interval. It transmits on that interval while connected, and a <strong>BEACON</strong> badge appears in the top bar — click the badge to turn it off.</p>
+
+<h3>Message Board (PBBS)</h3>
+<p>Enable it in Settings to run a local packet message board. The <strong>PBBS</strong> badge in the top bar opens the admin console — messages you compose there stay local and never go over RF.</p>
+
+<h3>Fonts &amp; Looks</h3>
+<p><strong>App Font Size</strong> (10–25, default 18) is the master knob — the whole interface, top bar included, scales with it. <strong>Connected Mode</strong> and <strong>Unproto</strong> font sizes are offsets from that base (−5 to +5, default −2), so you set one overall size and fine-tune each pane. Settings also has the light/dark theme.</p>
 
 <h3>Tips</h3>
 <p>
-- <strong>Auto-connect</strong> — enable in Settings to connect automatically on app startup.<br>
-- <strong>Clear</strong> buttons clear the message log or unproto display.<br>
+- <strong>Auto-connect</strong> — enable in Settings to connect on startup.<br>
+- <strong>Clear</strong> buttons wipe the message log or the unproto display.<br>
 - <strong>Retry indicator</strong> — shows T1 retry count and timeout during connected-mode sends.<br>
 - <strong>Raw KISS</strong> — enable in Settings to see raw hex KISS frames instead of decoded messages.<br>
-- Settings are saved to disk and persist across restarts.
+- <strong>Logs</strong> — the folder button (<span class="key">&#128194;</span>) opens the log directory; each day writes its own <code>YYMMDD_&lt;kind&gt;.log</code> file.<br>
+- Settings, history and board data are saved to disk and persist across restarts.
 </p>
 
     </div>
