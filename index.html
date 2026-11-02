@@ -486,6 +486,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .u-header .h-to{color:var(--u-call)}
 .u-header .h-dst{color:var(--u-call);font-weight:700}
 .u-header .h-via{color:var(--u-via)}
+.u-header .h-via.clickable{cursor:pointer}
+.u-header .h-via.clickable:hover{text-decoration:underline}
 .u-header .h-meta{color:var(--u-meta)}
 
 /* Payload continuation lines — no wrap, horizontal scroll for long lines. */
@@ -631,14 +633,43 @@ if(!window.__TAURI_INTERNALS__){
     try{var v=JSON.parse(_ls.getItem(_key));if(v&&typeof v==="object")return v}catch(e){}
     return {protocol:"AGWPE",callsign:"",host:"",port:8000,autoConnect:false,beaconEnabled:false,beacon:"",beaconInterval:240,beaconDest:"BEACON",beaconVia:"",appFontSize:18,connFontSize:-2,unprotoFontSize:-2,rawKissDisplay:false,debugTxEnabled:false,deduplicatePackets:false,simpleUnproto:false,onlyUnproto:false,hideVia:false,unprotoIgnoredDestinations:"NODES BEACON ID",unprotoTo:"",unprotoVia:"",theme:"dark",unprotoColors:null,messageBoardEnabled:false,messageBoardCallsign:"",messageBoardSsid:1,messageBoardSysops:"",messageBoardPrivacy:false,messageBoardPublicAliases:"ALL"};
   }
+  // Event plumbing: lets the UI actually receive events in preview (frames
+  // seeded below, and an echo of anything you "send").
+  var _cbs={},_nextCb=1,_listeners={};
+  function _emit(ev,payload){
+    (_listeners[ev]||[]).forEach(function(h){
+      try{var f=_cbs[h];if(f)f({event:ev,id:h,payload:payload})}catch(e){console.error("[preview] handler",ev,e)}
+    });
+  }
+  window.__previewEmit=_emit;
+  // Real TNC headers look like: radio: fm KBETH to BEACON via KBETH,KELSO ctl UI^ pid F0
+  function _hdr(src,dst,via){return "radio: fm "+src+" to "+dst+(via?" via "+via:"")+" ctl UI^ pid F0"}
   window.__TAURI_INTERNALS__={
-    transformCallback:function(){return 0},
+    transformCallback:function(fn){var id=_nextCb++;_cbs[id]=fn;return id},
     metadata:{currentWindow:{label:"main"}},
     invoke:function(cmd,args){
+      args=args||{};
       switch(cmd){
+        case "plugin:event|listen":
+          (_listeners[args.event]=_listeners[args.event]||[]).push(args.handler);
+          return Promise.resolve(args.handler);
+        case "plugin:event|unlisten":{
+          var s=_listeners[args.event]||[];var i=s.indexOf(args.handler);if(i>=0)s.splice(i,1);
+          return Promise.resolve(null);
+        }
         case "load_settings": return Promise.resolve(_previewSettings());
         case "save_settings": try{_ls.setItem(_key,JSON.stringify(args&&args.settings||{}))}catch(e){} return Promise.resolve(null);
         case "reset_settings": try{_ls.removeItem(_key)}catch(e){} return Promise.resolve(null);
+        case "kiss_connect": case "agw_connect": return Promise.resolve(null);
+        case "ax25_send_ui": case "agw_send_ui":{
+          var d=args.destSsid?args.dest+"-"+args.destSsid:args.dest;
+          var cs=(_previewSettings().callsign||"N0CALL").toUpperCase();
+          setTimeout(function(){_emit("ui-sent",{dest:d,text:args.text,radio_header:_hdr(cs,d,args.via||""),raw_kiss:""})},30);
+          return Promise.resolve(null);
+        }
+        case "ax25_send_iframe": case "agw_send_data":
+          setTimeout(function(){_emit("session-sent",{tab:args.tab,text:args.text})},30);
+          return Promise.resolve(null);
         case "append_log": return Promise.resolve(null);
         case "open_log_dir": return Promise.resolve(null);
         default: return Promise.resolve(null);
@@ -646,6 +677,22 @@ if(!window.__TAURI_INTERNALS__){
     }
   };
   window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:function(){}};
+  // ?demo=1 — sample traffic so a digi path can be clicked in the browser.
+  // Also callable anytime from devtools: __previewEmit(...) / __demoSeed()
+  if(new URLSearchParams(location.search).get("demo")==="1"){
+    window.__demoSeed=function(){
+      [["KBETH","BEACON","KBETH,KELSO","net cycle 3 heard KBANN KBETH KELSO"],
+       ["KBANN","ID","KBANN","KBANN/R Packet Node"],
+       ["KM6LYW-10","APRS","","!3830.50N/12045.10W- demo packet"],
+       ["KELSO","NODES","KELSO","KBETH KBANN KELSO KJOHN WOODY"]]
+      .forEach(function(r,i){
+        setTimeout(function(){
+          _emit("unproto-frame",{source:r[0],dest:r[1],info:r[3],frame_type:"UI-",radio_header:_hdr(r[0],r[1],r[2]),raw_kiss_data:"",sent:false});
+        },i*120);
+      });
+    };
+    setTimeout(function(){window.__demoSeed()},900);
+  }
 }
 </script>
   <script type="module" src="/src/main.js"></script>
@@ -674,7 +721,7 @@ if(!window.__TAURI_INTERNALS__){
       <button class="settings-btn" id="help-btn" title="How to use">&#63;</button>
       <button class="settings-btn" id="log-btn" title="Open log folder" onclick="openLogDir()">&#128194;</button>
       <button class="settings-btn" id="settings-btn">&#9881;</button>
-      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.19</span>
+      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.20</span>
     </div>
     <script>{!function(){try{if(window.__TAURI__)__TAURI__.app.getVersion().then(function(v){var e=document.getElementById('app-version');if(e)e.textContent='v'+v})}catch(e){}}()}</script>
   </div>

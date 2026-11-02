@@ -51,7 +51,9 @@
 
   // Save to cache (sync) + fire-and-forget to disk
   function saveHistoryEntry(key, val, max) {
-    if (!usingTauri || !val) return;
+    // Cache update is unconditional so the nav works in the browser preview
+    // (no Tauri bridge); only the disk write needs the backend.
+    if (!val) return;
     var arr = historyCache[key] = (historyCache[key] || []).slice();
     var pos = arr.indexOf(val);
     if (pos >= 0) arr.splice(pos, 1);
@@ -161,6 +163,11 @@
 
   setupCmdHistory("compose-in", composeHistoryKey, 20);
   setupCmdHistory("unproto-msg", "unproto_msg", 20);
+  // Dest + digi-path fields share the same nav: Up = most recently SENT value
+  // first, Down walks back down and restores whatever the field held.
+  setupCmdHistory("via-input", composeViaHistoryKey, 10);
+  setupCmdHistory("unproto-via", "unproto_via", 10);
+  setupCmdHistory("unproto-to", "unproto_to", 10);
 
   // ── C Tab Click Handler ──
   var modeTabs = document.getElementById("mode-tabs");
@@ -183,6 +190,7 @@
     if (ta && ta.value.trim()) { saveHistoryEntry(composeHistoryKey(), ta.value.trim(), 20); window.resetHistoryNav("compose-in"); }
     var vi = document.getElementById("via-input");
     if (vi && vi.value.trim()) saveHistoryEntry(composeViaHistoryKey(), vi.value.trim().toUpperCase(), 10);
+    window.resetHistoryNav("via-input");
   }
   function saveUnprotoHist() {
     var ta = document.getElementById("unproto-msg");
@@ -191,6 +199,8 @@
     var vi = document.getElementById("unproto-via");
     if (to && to.value.trim()) saveHistoryEntry("unproto_to", to.value.trim().toUpperCase(), 10);
     if (vi && vi.value.trim()) saveHistoryEntry("unproto_via", vi.value.trim().toUpperCase(), 10);
+    window.resetHistoryNav("unproto-to");
+    window.resetHistoryNav("unproto-via");
   }
   var sBtn = document.getElementById("send-btn");
   if (sBtn) sBtn.addEventListener("click", saveComposeHist);

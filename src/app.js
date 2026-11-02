@@ -75,11 +75,6 @@ const DEFAULT_SETTINGS = {
   unprotoIgnoredDestinations: "NODES BEACON ID", unprotoTo: "", unprotoVia: "",
 };
 
-let composeHistory = [];    // :c / connected command history (up-arrow)
-let composeHistIdx = -1;
-const unprotoCmdHistory = []; // unproto compose history
-let unprotoHistIdx = -1;
-
 // phash — simple string hash used for unproto dedup.
 function phash(s) {
   let h = 0;
@@ -255,22 +250,10 @@ composeIn.onkeydown = (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     handleCommand();
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    if (composeHistory.length && composeHistIdx > -1) {
-      if (composeHistIdx > 0) composeHistIdx--;
-      composeIn.value = composeHistory[composeHistIdx];
-    }
-  } else if (e.key === "ArrowDown") {
-    e.preventDefault();
-    if (composeHistory.length && composeHistIdx < composeHistory.length - 1) {
-      composeHistIdx++;
-      composeIn.value = composeHistory[composeHistIdx];
-    } else if (composeHistIdx >= composeHistory.length - 1) {
-      composeHistIdx = composeHistory.length;
-      composeIn.value = "";
-    }
   }
+  // ArrowUp/ArrowDown history nav is owned by history.js (single source of
+  // truth, newest-first). The legacy handlers here ran afterwards and
+  // overwrote them with the OLDEST entry — removed deliberately.
 };
 
 async function handleCommand() {
@@ -303,8 +286,7 @@ async function handleCommand() {
       refreshTabBar();
     }
     composeIn.value = "";
-    composeHistory.unshift(text);
-    composeHistIdx = composeHistory.length;
+    if (window.resetHistoryNav) window.resetHistoryNav("compose-in");
     return;
   }
 
@@ -338,8 +320,6 @@ async function handleCommand() {
   tabs[activeTab].lastSentText = text;
   try {
     await invoke(connCmd("ax25_send_iframe", "agw_send_data"), { connId: conn.id, tab: activeTab, text });
-    composeHistory.unshift(text);
-    composeHistIdx = composeHistory.length;
     composeIn.value = "";
   } catch (err) {
     tabMsg(activeTab, "sys", "Send failed: " + err);
@@ -368,6 +348,30 @@ function ingestUnproto(src, dst, payload, ts, frameType, radioHeader, rawKiss, s
   renderUnproto();
 }
 
+// ── Clickable digi paths (unproto pane) ────────────────────────────────
+// Normalize a TNC radio-header path into the app's via-field format:
+// "KBETH,KELSO*" -> "KBETH KELSO" (uppercase, comma/space separated,
+// has-been-repeated '*' markers dropped).
+function normViaPath(raw) {
+  return String(raw || "")
+    .replace(/^via\s+/i, "")
+    .split(/[,\s]+/)
+    .map((k) => k.replace(/\*+$/, "").trim().toUpperCase())
+    .filter(Boolean)
+    .join(" ");
+}
+
+// Build the via <span>. Clickable only when a real path was resolved.
+// Display text keeps the TNC's original comma form (no visual change to the
+// pane); data-via carries the normalized space-separated path for the field.
+function viaSpan(raw, prefix) {
+  const path = normViaPath(raw);
+  if (!path) return '<span class="h-via"></span>';
+  const shown = (prefix || "") + String(raw || "").replace(/^via\s+/i, "").trim();
+  const attr = esc(path).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return `<span class="h-via clickable" data-via="${attr}" title="Click to load this path">${esc(shown)}</span>`;
+}
+
 function renderUnproto() {
   unprotoData.innerHTML = "";
   unprotoCount = 0;
@@ -390,14 +394,16 @@ function renderUnproto() {
     const ft = entry.frameType || "UI";
     if (hdr) {
       if (settings.simpleUnproto) {
-        let uv = "";
+        // Simple mode shows only the first hop; clicking loads exactly what
+        // is displayed (predictable: what you see is what you get).
+        let uv = '<span class="h-via"></span>';
         if (!settings.hideVia && hdr) {
-          const m = hdr.match(/via\s+(\S+)/i);
-          if (m && m[1]) uv = " via " + esc(m[1]);
+          const m = hdr.match(/via\s+([^,\s]+)/i);
+          if (m && m[1]) uv = viaSpan(m[1], " via ");
         }
-        out += `<div class="u-header"><span class="h-time">${esc(entry.ts)}</span> <span class="h-src">${esc(entry.src)}</span> to <span class="h-dst">${esc(entry.dst || "")}</span><span class="h-via">${uv}</span></div>`;
+        out += `<div class="u-header"><span class="h-time">${esc(entry.ts)}</span> <span class="h-src">${esc(entry.src)}</span> to <span class="h-dst">${esc(entry.dst || "")}</span>${uv}</div>`;
       } else {
-        const q = hdr.replace(/^radio:\s*(?:fm\s+)?/, entry.ts + " ").replace(/^(\d{2}:\d{2}:\d{2})\s+(\S+)\s+to\s+(\S+?)(?:\s+(via\s+\S+(?:\s+\S+)*?(?=\s+ctl\s|\s+len\s|$)))?\s+(.*)$/, (m, t, s, d, v, rest) => `<span class="h-time">${esc(t)}</span> <span class="h-src">${esc(s)}</span> <span class="h-to">to</span> <span class="h-dst">${esc(d)}</span> <span class="h-via">${esc(v || "")}</span> <span class="h-meta">${esc(rest)}</span>`);
+        const q = hdr.replace(/^radio:\s*(?:fm\s+)?/, entry.ts + " ").replace(/^(\d{2}:\d{2}:\d{2})\s+(\S+)\s+to\s+(\S+?)(?:\s+(via\s+\S+(?:\s+\S+)*?(?=\s+ctl\s|\s+len\s|$)))?\s+(.*)$/, (m, t, s, d, v, rest) => `<span class="h-time">${esc(t)}</span> <span class="h-src">${esc(s)}</span> <span class="h-to">to</span> <span class="h-dst">${esc(d)}</span> ${settings.hideVia ? "" : viaSpan(v || "", " via ")} <span class="h-meta">${esc(rest)}</span>`);
         out += `<div class="u-header">${q}</div>`;
       }
     } else {
@@ -495,6 +501,39 @@ let unprotoToSaveTimer = null;
 let unprotoViaSaveTimer = null;
 function scheduleUnprotoToSave() { clearTimeout(unprotoToSaveTimer); unprotoToSaveTimer = setTimeout(saveUnprotoTo, 300); }
 function scheduleUnprotoViaSave() { clearTimeout(unprotoViaSaveTimer); unprotoViaSaveTimer = setTimeout(saveUnprotoVia, 300); }
+// ── Click a digi path in the unproto pane → load it into the via field ──
+// Field-fill only: nothing is written to history here. History still only
+// records a path when Send is actually clicked (see history.js), so a clicked
+// path that was never sent is invisible to the up-arrow nav.
+let viaClickDown = null;
+let viaClickHadSelection = false;
+unprotoData.addEventListener("mousedown", (e) => {
+  const span = e.target.closest ? e.target.closest(".h-via[data-via]") : null;
+  viaClickDown = span ? { x: e.clientX, y: e.clientY } : null;
+  // Snapshot the selection BEFORE the default mousedown action collapses it:
+  // if the user had text selected, this click is a copy/dismiss gesture, not
+  // a "load this path" request.
+  const sel = window.getSelection();
+  viaClickHadSelection = !!(sel && !sel.isCollapsed);
+});
+unprotoData.addEventListener("click", (e) => {
+  const span = e.target.closest ? e.target.closest(".h-via[data-via]") : null;
+  if (!span) return;
+  // Don't hijack a drag-select — copying text out of the log must still work.
+  const sel = window.getSelection();
+  if (viaClickHadSelection || (sel && !sel.isCollapsed)) return;
+  if (viaClickDown && (Math.abs(e.clientX - viaClickDown.x) > 4 || Math.abs(e.clientY - viaClickDown.y) > 4)) return;
+  const path = span.getAttribute("data-via") || "";
+  if (!path) return;
+  unprotoVia.value = path;
+  // Reset arrow-nav so Up goes to the last SENT path, not this clicked one.
+  if (window.resetHistoryNav) window.resetHistoryNav("unproto-via");
+  unprotoVia.focus({ preventScroll: true });
+  unprotoVia.setSelectionRange(path.length, path.length);
+  if (window.hideSuggestions) window.hideSuggestions("unproto-via");  // keep the dropdown from popping over the pane
+  scheduleUnprotoViaSave();  // persist the field like typing would
+});
+
 unprotoTo.addEventListener("input", scheduleUnprotoToSave);
 unprotoTo.onchange = saveUnprotoTo;
 unprotoVia.addEventListener("input", scheduleUnprotoViaSave);
@@ -504,22 +543,8 @@ unprotoMsg.onkeydown = (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     sendUnproto();
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    if (unprotoCmdHistory.length && unprotoHistIdx > -1) {
-      if (unprotoHistIdx > 0) unprotoHistIdx--;
-      unprotoMsg.value = unprotoCmdHistory[unprotoHistIdx];
-    }
-  } else if (e.key === "ArrowDown") {
-    e.preventDefault();
-    if (unprotoCmdHistory.length && unprotoHistIdx < unprotoCmdHistory.length - 1) {
-      unprotoHistIdx++;
-      unprotoMsg.value = unprotoCmdHistory[unprotoHistIdx];
-    } else if (unprotoHistIdx >= unprotoCmdHistory.length - 1) {
-      unprotoHistIdx = unprotoCmdHistory.length;
-      unprotoMsg.value = "";
-    }
   }
+  // Arrow history nav owned by history.js — see note above.
 };
 
 async function sendUnproto() {
@@ -536,8 +561,7 @@ async function sendUnproto() {
   const ssid = (parts.length > 1 && parseInt(parts[1])) || 0;
   try {
     await invoke(connCmd("ax25_send_ui", "agw_send_ui"), { connId: conn.id, dest: base, destSsid: ssid, text: msg, via });
-    unprotoCmdHistory.unshift(msg);
-    unprotoHistIdx = unprotoCmdHistory.length;
+    if (window.resetHistoryNav) window.resetHistoryNav("unproto-msg");
     unprotoMsg.value = "";
     unprotoStatus.textContent = "";
   } catch (err) {
