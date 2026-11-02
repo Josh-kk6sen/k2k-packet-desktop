@@ -372,10 +372,73 @@ function viaSpan(raw, prefix) {
   return `<span class="h-via clickable" data-via="${attr}" title="Click to load this path">${esc(shown)}</span>`;
 }
 
+// ── Dedup path merging ─────────────────────────────────────────────────
+// A packet carries its whole digi route from the moment it is transmitted, so
+// a duplicate copy never introduces a surprise digi — what it adds is the
+// "has been repeated" marker (*, the AX.25 H bit) on the digis it has already
+// passed through. With dedup on we keep ONE entry per packet and union that
+// knowledge into it, so the path visibly walks down the route as repeats are
+// heard: KBETH,KELSO -> KBETH*,KELSO -> KBETH*,KELSO*.
+function viaTokensFromHeader(hdr) {
+  if (!hdr) return [];
+  const m = String(hdr).match(/\bvia\s+(.+?)(?=\s+(?:ctl|len|pid)\b|$)/i);
+  if (!m) return [];
+  const toks = m[1].trim().split(/[,\s]+/).filter(Boolean);
+  // Only infer "this digi already repeated it" (a non-last hop) when the TNC is
+  // demonstrably emitting H-bit markers at all. If the header carries no star
+  // anywhere we invent none — no false claims about what repeated the frame.
+  const tncMarksHops = toks.some((t) => /\*$/.test(t));
+  return toks.map((t, i) => ({
+    call: t.replace(/\*+$/, "").toUpperCase(),
+    star: /\*$/.test(t) || (tncMarksHops && i < toks.length - 1),
+  }));
+}
+
+// Union one copy's path into an entry's accumulated path (idempotent, so it is
+// safe to re-run on every render).
+function mergeViaInto(entry, tokens) {
+  if (!tokens.length) return;
+  if (!entry.dedupVia) entry.dedupVia = [];
+  for (const t of tokens) {
+    const hit = entry.dedupVia.find((c) => c.call === t.call);
+    if (hit) hit.star = hit.star || t.star;
+    else entry.dedupVia.push({ call: t.call, star: t.star });
+  }
+}
+
+// What the pane should display as this entry's path: the merged path when
+// dedup is on (it carries the stars), otherwise the entry's own raw path.
+function displayVia(entry, hdr) {
+  if (settings.deduplicatePackets) {
+    const merged = dedupViaText(entry);
+    if (merged) return merged;
+  }
+  const m = String(hdr || "").match(/\bvia\s+(.+?)(?=\s+(?:ctl|len|pid)\b|$)/i);
+  return m ? m[1].trim() : "";
+}
+
+function dedupViaText(entry) {
+  if (!entry.dedupVia || !entry.dedupVia.length) return "";
+  return entry.dedupVia.map((c) => c.call + (c.star ? "*" : "")).join(",");
+}
+
 function renderUnproto() {
   unprotoData.innerHTML = "";
   unprotoCount = 0;
-  const seen = new Set();
+  // Pre-pass: with dedup on, merge every duplicate copy's path knowledge into
+  // the entry that will be displayed BEFORE rendering, so the retained entry
+  // shows the accumulated stars on the very frame they arrive (a single-pass
+  // merge would render the kept entry before its duplicates were seen).
+  if (settings.deduplicatePackets) {
+    const firstByKey = new Map();
+    for (const f of unprotoFrames) {
+      const k = f.src + "|" + f.dst + "|" + phash(f.payload);
+      const first = firstByKey.get(k);
+      if (first) mergeViaInto(first, viaTokensFromHeader(f.radioHeader));
+      else firstByKey.set(k, f);
+    }
+  }
+  const seen = new Set();   // dedup keys already rendered
   for (let idx = 0; idx < unprotoFrames.length; idx++) {
     const entry = unprotoFrames[idx];
     if (settings.simpleUnproto && settings.unprotoIgnoredDestinations) {
@@ -384,6 +447,9 @@ function renderUnproto() {
     }
     if (settings.deduplicatePackets) {
       const key = entry.src + "|" + entry.dst + "|" + phash(entry.payload);
+      // Duplicate copy: its path has already been merged into the kept entry
+      // by the pre-pass, so just don't render it. The stored raw header is
+      // never modified — switching dedup off restores the untouched originals.
       if (seen.has(key)) continue;
       seen.add(key);
     }
@@ -394,16 +460,13 @@ function renderUnproto() {
     const ft = entry.frameType || "UI";
     if (hdr) {
       if (settings.simpleUnproto) {
-        // Simple mode shows only the first hop; clicking loads exactly what
-        // is displayed (predictable: what you see is what you get).
+        // Simple mode shows the full digi path (merged + starred when dedup
+        // is on). Clicking loads exactly what is displayed.
         let uv = '<span class="h-via"></span>';
-        if (!settings.hideVia && hdr) {
-          const m = hdr.match(/via\s+([^,\s]+)/i);
-          if (m && m[1]) uv = viaSpan(m[1], " via ");
-        }
+        if (!settings.hideVia && hdr) uv = viaSpan(displayVia(entry, hdr), " via ");
         out += `<div class="u-header"><span class="h-time">${esc(entry.ts)}</span> <span class="h-src">${esc(entry.src)}</span> to <span class="h-dst">${esc(entry.dst || "")}</span>${uv}</div>`;
       } else {
-        const q = hdr.replace(/^radio:\s*(?:fm\s+)?/, entry.ts + " ").replace(/^(\d{2}:\d{2}:\d{2})\s+(\S+)\s+to\s+(\S+?)(?:\s+(via\s+\S+(?:\s+\S+)*?(?=\s+ctl\s|\s+len\s|$)))?\s+(.*)$/, (m, t, s, d, v, rest) => `<span class="h-time">${esc(t)}</span> <span class="h-src">${esc(s)}</span> <span class="h-to">to</span> <span class="h-dst">${esc(d)}</span> ${settings.hideVia ? "" : viaSpan(v || "", " via ")} <span class="h-meta">${esc(rest)}</span>`);
+        const q = hdr.replace(/^radio:\s*(?:fm\s+)?/, entry.ts + " ").replace(/^(\d{2}:\d{2}:\d{2})\s+(\S+)\s+to\s+(\S+?)(?:\s+(via\s+\S+(?:\s+\S+)*?(?=\s+ctl\s|\s+len\s|$)))?\s+(.*)$/, (m, t, s, d, v, rest) => `<span class="h-time">${esc(t)}</span> <span class="h-src">${esc(s)}</span> <span class="h-to">to</span> <span class="h-dst">${esc(d)}</span> ${settings.hideVia ? "" : viaSpan(displayVia(entry, v || ""), " via ")} <span class="h-meta">${esc(rest)}</span>`);
         out += `<div class="u-header">${q}</div>`;
       }
     } else {

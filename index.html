@@ -681,10 +681,15 @@ if(!window.__TAURI_INTERNALS__){
   // Also callable anytime from devtools: __previewEmit(...) / __demoSeed()
   if(new URLSearchParams(location.search).get("demo")==="1"){
     window.__demoSeed=function(){
+      // Last three are the SAME packet heard three times as it walks its
+      // route — dedup on keeps one entry and accumulates the * markers.
+      var beacon = "Join the map -  go to https://map.KK6SEN.com";
       [["KBETH","BEACON","KBETH,KELSO","net cycle 3 heard KBANN KBETH KELSO"],
        ["KBANN","ID","KBANN","KBANN/R Packet Node"],
        ["KM6LYW-10","APRS","","!3830.50N/12045.10W- demo packet"],
-       ["KELSO","NODES","KELSO","KBETH KBANN KELSO KJOHN WOODY"]]
+       ["AUBNOD","BEACON","KBANN,KJOHN,KBETH,KROCK",beacon],
+       ["AUBNOD","BEACON","KBANN*,KJOHN,KBETH,KROCK",beacon],
+       ["AUBNOD","BEACON","KBANN*,KJOHN*,KBETH*,KROCK",beacon]]
       .forEach(function(r,i){
         setTimeout(function(){
           _emit("unproto-frame",{source:r[0],dest:r[1],info:r[3],frame_type:"UI-",radio_header:_hdr(r[0],r[1],r[2]),raw_kiss_data:"",sent:false});
@@ -721,7 +726,7 @@ if(!window.__TAURI_INTERNALS__){
       <button class="settings-btn" id="help-btn" title="How to use">&#63;</button>
       <button class="settings-btn" id="log-btn" title="Open log folder" onclick="openLogDir()">&#128194;</button>
       <button class="settings-btn" id="settings-btn">&#9881;</button>
-      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.20</span>
+      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.21</span>
     </div>
     <script>{!function(){try{if(window.__TAURI__)__TAURI__.app.getVersion().then(function(v){var e=document.getElementById('app-version');if(e)e.textContent='v'+v})}catch(e){}}()}</script>
   </div>
