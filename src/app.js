@@ -590,6 +590,37 @@ let unprotoToSaveTimer = null;
 let unprotoViaSaveTimer = null;
 function scheduleUnprotoToSave() { clearTimeout(unprotoToSaveTimer); unprotoToSaveTimer = setTimeout(saveUnprotoTo, 300); }
 function scheduleUnprotoViaSave() { clearTimeout(unprotoViaSaveTimer); unprotoViaSaveTimer = setTimeout(saveUnprotoVia, 300); }
+
+// ── Reverse the Via path order (⇄ button at the end of the Via field) ──
+// Flips the hop order of whatever is currently typed/loaded in the field so a
+// return path can be reused on the way back without retyping it. The field's
+// own separator style is preserved (commas stay commas, otherwise spaces).
+const unprotoViaRev = $("#unproto-via-rev");
+function viaPathParts(raw) {
+  return String(raw || "").trim().split(/[\s,]+/).filter(Boolean);
+}
+function syncViaRevState() {
+  if (!unprotoViaRev) return;
+  unprotoViaRev.disabled = viaPathParts(unprotoVia.value).length < 2;
+}
+function reverseViaPath() {
+  const raw = unprotoVia.value.trim();
+  const parts = viaPathParts(raw);
+  if (parts.length < 2) return;              // nothing (or one hop) to swap
+  const sep = raw.includes(",") ? "," : " ";
+  unprotoVia.value = parts.reverse().join(sep);
+  unprotoVia.dispatchEvent(new Event("input"));   // upper-case + save + suggestions
+  if (window.resetHistoryNav) window.resetHistoryNav("unproto-via");
+  if (window.hideSuggestions) window.hideSuggestions("unproto-via");
+  saveUnprotoVia();
+  syncViaRevState();
+}
+if (unprotoViaRev) {
+  unprotoViaRev.onclick = reverseViaPath;
+  unprotoVia.addEventListener("input", syncViaRevState);
+  unprotoVia.addEventListener("keyup", syncViaRevState);   // arrow-history recall sets .value without an input event
+  syncViaRevState();
+}
 // ── Click a digi path in the unproto pane → load it into the via field ──
 // Field-fill only: nothing is written to history here. History still only
 // records a path when Send is actually clicked (see history.js), so a clicked
@@ -621,6 +652,7 @@ unprotoData.addEventListener("click", (e) => {
   unprotoVia.setSelectionRange(path.length, path.length);
   if (window.hideSuggestions) window.hideSuggestions("unproto-via");  // keep the dropdown from popping over the pane
   scheduleUnprotoViaSave();  // persist the field like typing would
+  syncViaRevState();
 });
 
 unprotoTo.addEventListener("input", scheduleUnprotoToSave);
@@ -725,6 +757,7 @@ async function loadSettings() {
     if (t.port) portEl.value = t.port;
     if (t.unprotoTo) unprotoTo.value = t.unprotoTo;
     if (t.unprotoVia) unprotoVia.value = t.unprotoVia;
+    syncViaRevState();
     applyFontsAndTheme();
     if (t.autoConnect && t.callsign && t.host) setTimeout(() => connectBtn.click(), 500);
     $("#u-dedup-btn").classList.toggle("active", settings.deduplicatePackets);
