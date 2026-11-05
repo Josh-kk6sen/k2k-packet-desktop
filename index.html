@@ -391,11 +391,15 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #set-port::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #port[type=number],
 #set-port[type=number] { -moz-appearance: textfield; }
-/* Connect button — green for connect, red for disconnect. */
-#connect-btn{background:var(--green);color:#000;border:none;border-radius:4px;padding:2px 12px;font-weight:600;font-size:inherit;cursor:pointer;line-height:1.3;width:100%}
+/* Connect button — green for connect, yellow while connecting, red for
+   disconnect. The width is pinned by JS (sizeConnectBtn) to the longest label
+   so the button never resizes as the label changes. */
+#connect-btn{background:var(--green);color:#000;border:none;border-radius:4px;padding:2px 12px;font-weight:600;font-size:inherit;cursor:pointer;line-height:1.3;width:100%;white-space:nowrap;text-align:center;box-sizing:border-box}
 #fullscreen-btn{background:none;border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:2px 7px;font-size:inherit;cursor:pointer;margin-left:1px;line-height:1.2}
 #fullscreen-btn:hover{color:var(--text);border-color:var(--text2)}
 #connect-btn:hover{background:var(--green-dim)}
+#connect-btn.connecting{background:var(--yellow);color:#000;cursor:progress}
+#connect-btn.connecting:hover{background:var(--yellow)}
 #connect-btn.disconnect{background:var(--red)}
 #connect-btn.disconnect:hover{background:#da3633}
 
@@ -734,7 +738,7 @@ if(!window.__TAURI_INTERNALS__){
       <button class="settings-btn" id="help-btn" title="How to use">&#63;</button>
       <button class="settings-btn" id="log-btn" title="Open log folder" onclick="openLogDir()">&#128194;</button>
       <button class="settings-btn" id="settings-btn">&#9881;</button>
-      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.22</span>
+      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.23</span>
     </div>
     <script>{!function(){try{if(window.__TAURI__)__TAURI__.app.getVersion().then(function(v){var e=document.getElementById('app-version');if(e)e.textContent='v'+v})}catch(e){}}()}</script>
   </div>

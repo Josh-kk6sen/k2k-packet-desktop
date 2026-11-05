@@ -161,6 +161,30 @@ function refreshTabBar() {
   });
 }
 
+// ── Connect button label + fixed width ──
+// The label cycles Connect → Connecting → Disconnect. The button (and the
+// topbar column it sits in) must NOT resize when the label length changes, so
+// measure the LONGEST label once per font change and pin the width to it.
+const CONNECT_BTN_LABELS = ["Connecting", "Disconnect", "Connect"];
+function sizeConnectBtn() {
+  const probe = document.createElement("span");
+  probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font:inherit";
+  connectBtn.appendChild(probe);
+  let w = 0;
+  for (const label of CONNECT_BTN_LABELS) {
+    probe.textContent = label;
+    w = Math.max(w, probe.getBoundingClientRect().width);
+  }
+  probe.remove();
+  const cs = getComputedStyle(connectBtn);
+  const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+  connectBtn.style.width = Math.ceil(w + pad) + "px";
+}
+function setConnectBtn(label, cls) {
+  connectBtn.textContent = label;
+  connectBtn.className = cls || "";
+}
+
 // ── Connect / disconnect ──
 async function disconnectTnc() {
   if (!conn) return;
@@ -172,8 +196,7 @@ async function disconnectTnc() {
   setConnStatus("idle", "Disconnected");
   sendBtn.disabled = true;
   unprotoSend.disabled = true;
-  connectBtn.textContent = "Connect";
-  connectBtn.className = "";
+  setConnectBtn("Connect");
   hostEl.disabled = false;
   portEl.disabled = false;
   for (let i = 0; i < TAB_COUNT; i++) { tabs[i].state = "disconnected"; tabs[i].remote = ""; }
@@ -199,6 +222,9 @@ async function connectTnc() {
   const base = parts[0];
   const ssid = parseInt(parts[1]) || 0;
   setConnStatus("connecting", "Connecting...");
+  // Immediate visual feedback: the backend connect can block for the full TCP
+  // timeout (os error 10060) when the TNC is silent, so flip the button now.
+  setConnectBtn("Connecting", "connecting");
   try {
     const id = `c-${Date.now()}`;
     conn = { id, host: hostv, port: portv, cx: false };
@@ -207,8 +233,7 @@ async function connectTnc() {
     setConnStatus("connected", "Connected");
     sendBtn.disabled = false;
     unprotoSend.disabled = false;
-    connectBtn.textContent = "Disconnect";
-    connectBtn.className = "disconnect";
+    setConnectBtn("Disconnect", "disconnect");
     hostEl.disabled = true;
     portEl.disabled = true;
     composeIn.focus();
@@ -229,6 +254,7 @@ async function connectTnc() {
     } catch (e) {}
   } catch (err) {
     setConnStatus("idle", " Disconnected");
+    setConnectBtn("Connect");
     tabMsg(activeTab, "sys", "Failed: " + err);
   }
 }
@@ -677,6 +703,9 @@ function applyFontsAndTheme() {
   };
   hint("conn-fontsize-hint", settings.connFontSize ?? -2, conn);
   hint("unproto-fontsize-hint", settings.unprotoFontSize ?? -2, unproto);
+  // The connect-button width is measured text, so re-measure whenever the
+  // app font size changes.
+  sizeConnectBtn();
 }
 
 function applyPanelVisibility() {
@@ -998,8 +1027,7 @@ listen("tnc-connected", (ev) => {
   if (conn && conn.id === ev.payload.id) {
     conn.cx = true;
     setConnStatus("connected", "Connected");
-    connectBtn.textContent = "Disconnect";
-    connectBtn.className = "disconnect";
+    setConnectBtn("Disconnect", "disconnect");
     hostEl.disabled = true;
     portEl.disabled = true;
     sendBtn.disabled = false;
