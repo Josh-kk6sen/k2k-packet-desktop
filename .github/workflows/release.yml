@@ -22,12 +22,12 @@ jobs:
   build-linux:
     name: Build Linux .deb
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || contains('${{ github.event.inputs.bundles }}', 'deb') || contains('${{ github.event.inputs.bundles }}', 'all')
+    if: github.event_name != 'workflow_dispatch' || contains(github.event.inputs.bundles, 'deb') || contains(github.event.inputs.bundles, 'all')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -59,19 +59,19 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "K2K Packet Desktop ${{ github.ref_name }}"
           releaseBody: ""
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: --bundles deb
 
   build-windows:
     name: Build Windows .exe
     runs-on: windows-latest
-    if: github.event_name != 'workflow_dispatch' || contains('${{ github.event.inputs.bundles }}', 'exe') || contains('${{ github.event.inputs.bundles }}', 'all')
+    if: github.event_name != 'workflow_dispatch' || contains(github.event.inputs.bundles, 'exe') || contains(github.event.inputs.bundles, 'all')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -90,19 +90,19 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "K2K Packet Desktop ${{ github.ref_name }}"
           releaseBody: ""
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: --bundles nsis
 
   build-macos:
     name: Build macOS .dmg
     runs-on: macos-15
-    if: github.event_name != 'workflow_dispatch' || contains('${{ github.event.inputs.bundles }}', 'dmg') || contains('${{ github.event.inputs.bundles }}', 'all')
+    if: github.event_name != 'workflow_dispatch' || contains(github.event.inputs.bundles, 'dmg') || contains(github.event.inputs.bundles, 'all')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -129,6 +129,6 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "K2K Packet Desktop ${{ github.ref_name }}"
           releaseBody: ""
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: --bundles dmg --target universal-apple-darwin
