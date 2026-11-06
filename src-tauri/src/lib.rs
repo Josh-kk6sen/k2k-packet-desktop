@@ -185,7 +185,11 @@ pub fn run() {
             .center();
             #[cfg(target_os = "windows")]
             let wb = wb.data_directory(crate::storage::data_base(handle));
-            let _ = wb.build();
+            // Surface a failed window/WebView creation in the log instead of
+            // silently running with no window (looked like "app won't open").
+            if let Err(e) = wb.build() {
+                append_log("raw", &format!("ERROR creating main window: {e}"));
+            }
 
             // Restore saved window position/size from last session
             let _ = restore_window_state(&handle);
@@ -205,6 +209,12 @@ pub fn run() {
                     let maximized = window.is_maximized().unwrap_or(false);
                     let handle = window.app_handle();
                     let Some(size) = window.outer_size().ok() else { return; };
+                    // Never persist a degenerate size (a minimized/hidden
+                    // window can report 0x0). Saving that is what hides the
+                    // app on the next launch.
+                    if size.width < settings::MIN_WIN_W || size.height < settings::MIN_WIN_H {
+                        return;
+                    }
                     let Some(pos) = window.outer_position().ok() else { return; };
                     let _ = settings::save_window_state_sync(
                         &handle,

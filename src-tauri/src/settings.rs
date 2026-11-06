@@ -408,20 +408,83 @@ fn save_settings_to_path(path: &std::path::Path, settings: &AppSettings) -> Resu
     crate::storage::write_json_file(&path.to_path_buf(), settings, "settings")
 }
 
+/// Saved window geometry is only ever a HINT. A bad save (0x0 written while
+/// the window was minimized/hidden, or coordinates on a monitor that has since
+/// been unplugged) must never be able to hide the app: that produces the
+/// "process runs, taskbar entry, no window, cannot close" failure.
+pub const MIN_WIN_W: u32 = 400;
+pub const MIN_WIN_H: u32 = 300;
+const MAX_WIN_DIM: u32 = 20000;
+
+/// A stored size is usable only inside sane bounds.
+pub fn usable_window_size(w: u32, h: u32) -> Option<(u32, u32)> {
+    if (MIN_WIN_W..=MAX_WIN_DIM).contains(&w) && (MIN_WIN_H..=MAX_WIN_DIM).contains(&h) {
+        Some((w, h))
+    } else {
+        None
+    }
+}
+
+/// True when enough of a window whose OUTER top-left is (x, y) would land on
+/// one of the given monitor rects (mx, my, mw, mh). Requires 120x80 px visible.
+pub fn geometry_visible_on(x: i32, y: i32, monitors: &[(i32, i32, u32, u32)]) -> bool {
+    const NEED_W: i32 = 120;
+    const NEED_H: i32 = 80;
+    monitors.iter().any(|&(mx, my, mw, mh)| {
+        x + NEED_W > mx
+            && x < mx + mw as i32
+            && y + NEED_H > my
+            && y < my + mh as i32
+    })
+}
+
+fn monitor_rects(window: &tauri::WebviewWindow) -> Vec<(i32, i32, u32, u32)> {
+    match window.available_monitors() {
+        Ok(ms) => ms
+            .iter()
+            .map(|m| {
+                let p = m.position();
+                let s = m.size();
+                (p.x, p.y, s.width, s.height)
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
 /// Setup-time restore: read settings and apply window geometry
 pub fn restore_window_state(app: &AppHandle) -> Result<(), String> {
     let Ok(Some(settings)) = load_settings_from_disk(app) else { return Ok(()); };
     let Some(window) = app.get_webview_window("main") else { return Ok(()); };
+    // Only restore a size that could actually be a window. Anything else
+    // (0x0, 3x2 …) is treated as "never saved" and the builder's default
+    // 920x680 stands.
+    let usable = match (settings.window_width, settings.window_height) {
+        (Some(w), Some(h)) => usable_window_size(w, h),
+        _ => None,
+    };
     if !settings.window_maximized.unwrap_or(false) {
-        if let (Some(w), Some(h)) = (settings.window_width, settings.window_height) {
+        if let Some((w, h)) = usable {
             let _ = window.set_size(tauri::PhysicalSize {
                 width: w,
                 height: h,
             });
         }
     }
-    if let (Some(x), Some(y)) = (settings.window_x, settings.window_y) {
-        let _ = window.set_position(tauri::PhysicalPosition { x, y });
+    // Only restore a position when we also have a usable size AND the point
+    // still lands on an attached monitor — otherwise keep the centered default
+    // instead of parking the window off-screen.
+    let mut placed = false;
+    if usable.is_some() {
+        if let (Some(x), Some(y)) = (settings.window_x, settings.window_y) {
+            if geometry_visible_on(x, y, &monitor_rects(&window)) {
+                let _ = window.set_position(tauri::PhysicalPosition { x, y });
+                placed = true;
+            }
+        }
+    }
+    if !placed && usable.is_none() {
+        let _ = window.center();
     }
     if settings.window_maximized.unwrap_or(false) {
         let _ = window.maximize();
@@ -904,5 +967,39 @@ mod tests {
         let bak_txt = std::fs::read_to_string(&bak).expect("read bak again");
         assert!(bak_txt.contains("KK6SEN"), "corrupt main must not clobber good bak");
         cleanup(&path);
+    }
+}
+
+#[cfg(test)]
+mod window_geometry_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_degenerate_sizes() {
+        assert_eq!(usable_window_size(0, 0), None);
+        assert_eq!(usable_window_size(0, 680), None);
+        assert_eq!(usable_window_size(920, 0), None);
+        assert_eq!(usable_window_size(10, 10), None);
+    }
+
+    #[test]
+    fn accepts_normal_sizes() {
+        assert_eq!(usable_window_size(920, 680), Some((920, 680)));
+        assert_eq!(usable_window_size(640, 480), Some((640, 480)));
+    }
+
+    #[test]
+    fn offscreen_positions_are_rejected() {
+        let monitors = [(0, 0, 1920u32, 1080u32)];
+        assert!(geometry_visible_on(100, 100, &monitors));
+        assert!(geometry_visible_on(-50, -20, &monitors));
+        // Parking the window's top-left way negative (above/left of every
+        // screen) is the classic invalid-restore case.
+        assert!(!geometry_visible_on(-32000, -32000, &monitors));
+        assert!(!geometry_visible_on(5000, 100, &monitors));
+        // Second monitor to the right of the primary.
+        let two = [(0, 0, 1920u32, 1080u32), (1920, 0, 2560u32, 1440u32)];
+        assert!(geometry_visible_on(2000, 300, &two));
+        assert!(!geometry_visible_on(2000, 300, &monitors));
     }
 }

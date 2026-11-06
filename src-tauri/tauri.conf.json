@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nousresearch/hermes-agent/refs/heads/main/scripts/schema.json",
   "productName": "K2K Packet Desktop",
-  "version": "0.11.24",
+  "version": "0.11.25",
   "identifier": "K2KDesktop",
   "build": {
     "frontendDist": "../dist",

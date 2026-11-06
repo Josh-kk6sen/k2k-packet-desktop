@@ -1116,6 +1116,9 @@ async function saveWindowStateDebounced() {
         await invoke("save_window_state", { width: 0, height: 0, x: 0, y: 0, maximized: true });
       } else {
         const size = await win.outerSize();
+        // A minimized/hidden window can report 0x0; persisting that hides the
+        // window on the next launch, so skip the save in that case.
+        if (size.width < 400 || size.height < 300) return;
         const pos = await win.outerPosition();
         await invoke("save_window_state", { width: size.width, height: size.height, x: pos.x, y: pos.y, maximized: false });
       }
