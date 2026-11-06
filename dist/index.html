@@ -518,7 +518,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #unproto-via-rev svg{width:1.1em;height:1.1em;display:block}
 #unproto-via-rev:hover{color:var(--text);border-color:var(--text2)}
 #unproto-via-rev:active{transform:translateY(1px)}
-#unproto-via-rev:disabled{opacity:.4;cursor:default;transform:none}
+#unproto-via-rev[data-idle="1"]{opacity:.4;cursor:default;transform:none}
 #unproto-status{font-size:var(--unproto-font-size);color:var(--muted);padding:0 2px;flex-shrink:0}
 /* Send row (matches #compose on connected mode) */
 #unproto-send-row{display:flex;align-items:flex-end;gap:6px;padding:4px 10px 8px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0}
@@ -718,7 +718,7 @@ if(!window.__TAURI_INTERNALS__){
   }
 }
 </script>
-  <script type="module" crossorigin src="/assets/index-B4jnqgYr.js"></script>
+  <script type="module" crossorigin src="/assets/index-BJQwYzGY.js"></script>
 </head>
 <body>
 <div id="app">
@@ -744,7 +744,7 @@ if(!window.__TAURI_INTERNALS__){
       <button class="settings-btn" id="help-btn" title="How to use">&#63;</button>
       <button class="settings-btn" id="log-btn" title="Open log folder" onclick="openLogDir()">&#128194;</button>
       <button class="settings-btn" id="settings-btn">&#9881;</button>
-      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.25</span>
+      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.26</span>
     </div>
     <script>{!function(){try{if(window.__TAURI__)__TAURI__.app.getVersion().then(function(v){var e=document.getElementById('app-version');if(e)e.textContent='v'+v})}catch(e){}}()}</script>
   </div>
@@ -806,7 +806,7 @@ if(!window.__TAURI_INTERNALS__){
             <input id="unproto-via" placeholder="DIGI1 DIGI2" oninput="this.value=this.value.toUpperCase();showSuggestions('unproto-via')" onfocus="showSuggestions('unproto-via')" onblur="hideSuggestions('unproto-via')" autocomplete="off" />
             <div class="sug-panel" id="sug-unproto-via"></div>
           </span>
-          <button id="unproto-via-rev" type="button" title="Reverse the via path" aria-label="Reverse the via path" disabled>
+          <button id="unproto-via-rev" type="button" title="Reverse the via path" aria-label="Reverse the via path" data-idle="1">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
           </button>
         </div>

@@ -112,7 +112,13 @@
   };
   const pickSuggestion = function (id, el) {
     var inp = document.getElementById(id);
-    if (inp) { inp.value = el.getAttribute("data-val"); }
+    if (inp) {
+      inp.value = el.getAttribute("data-val");
+      // A popup pick sets .value with no input event, so anything that keys off
+      // "is there content in this field" (e.g. the via-reverse button) has to be
+      // told explicitly.
+      inp.dispatchEvent(new Event("valuepicked"));
+    }
     var panel = document.getElementById("sug-" + id);
     if (panel) panel.classList.remove("open");
   };

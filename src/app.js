@@ -601,7 +601,10 @@ function viaPathParts(raw) {
 }
 function syncViaRevState() {
   if (!unprotoViaRev) return;
-  unprotoViaRev.disabled = viaPathParts(unprotoVia.value).length < 2;
+  // Dim only — never hard-disable, so a stale flag can't swallow a real click.
+  const idle = viaPathParts(unprotoVia.value).length < 2;
+  unprotoViaRev.dataset.idle = idle ? "1" : "0";
+  unprotoViaRev.setAttribute("aria-disabled", idle ? "true" : "false");
 }
 function reverseViaPath() {
   const raw = unprotoVia.value.trim();
@@ -619,6 +622,8 @@ if (unprotoViaRev) {
   unprotoViaRev.onclick = reverseViaPath;
   unprotoVia.addEventListener("input", syncViaRevState);
   unprotoVia.addEventListener("keyup", syncViaRevState);   // arrow-history recall sets .value without an input event
+  unprotoVia.addEventListener("valuepicked", syncViaRevState);   // history popup pick
+  window.syncViaRevState = syncViaRevState;
   syncViaRevState();
 }
 // ── Click a digi path in the unproto pane → load it into the via field ──
