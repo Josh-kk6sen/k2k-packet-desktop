@@ -1445,6 +1445,16 @@ async fn handle_ax25_frame(
     );
 
     // ── Inbound listener routing (dest-keyed) ──
+    // A LIVE client session owns frames from its remote. An outbound connect's
+    // UA / RR / I-frames are addressed to our own callsign, so without this
+    // gate the chat listener swallows them and the C-tab never leaves
+    // AwaitingConnect (remote shows connected, we never do). Checked first,
+    // before any gate can claim the frame.
+    let client_owns_src = {
+        let c = client_arc.lock().await;
+        client_session_owns(&c.info.sessions, src, src_ssid)
+    };
+
     // Two listeners answer inbound connects: the message board (its own
     // callsign) and direct chat (the operator's callsign from the top of
     // Settings). Routing by DEST is what keeps a station connected to both a
@@ -1480,10 +1490,10 @@ async fn handle_ax25_frame(
                 ));
                 None
             } else {
-                chat_target(app_handle, dest, dest_ssid)
+                chat_target(app_handle, dest, dest_ssid, client_owns_src)
             }
         } else {
-            chat_target(app_handle, dest, dest_ssid)
+            chat_target(app_handle, dest, dest_ssid, client_owns_src)
         }
     };
     if let Some(kind) = route {
@@ -1536,15 +1546,34 @@ fn server_slot_for(
 }
 
 /// Does the operator-callsign chat listener own this destination?
+///
+/// `client_owns_src` suppresses the listener when a C-tab already has a live
+/// session with this source — otherwise an outbound connect's own replies
+/// (addressed to our callsign) would be stolen by the listener.
 fn chat_target(
     app_handle: &std::sync::Arc<dyn crate::kernel::output::KernelOutput>,
     dest: &str,
     dest_ssid: u8,
+    client_owns_src: bool,
 ) -> Option<ServerKind> {
+    if client_owns_src {
+        return None;
+    }
     match crate::kernel::output::chat_gate(app_handle.as_ref()) {
         Some((call, ssid)) if dest == call && dest_ssid == ssid => Some(ServerKind::Chat),
         _ => None,
     }
+}
+
+/// Is any C-tab session live with this source? (Pure — unit-testable.)
+///
+/// "Live" means any state but Disconnected, so the check also covers the
+/// AwaitingConnect window right after we send SABM — which is exactly when the
+/// remote's UA arrives.
+fn client_session_owns(sessions: &[Ax25Session], src: &str, src_ssid: u8) -> bool {
+    sessions
+        .iter()
+        .any(|s| s.remote == src && s.remote_ssid == src_ssid && s.state != Ax25ConnState::Disconnected)
 }
 
 /// First C-tab with nothing on it — no live session and no chat listener
@@ -4279,6 +4308,42 @@ mod tests {
         assert_eq!(server_slot_for(&pool, "W6ABC", 0, "KK6SEN", 1), Some(0));
         assert_eq!(server_slot_for(&pool, "W6ABC", 0, "KK6SEN", 15), Some(2));
         assert_eq!(server_slot_for(&pool, "W6ABC", 7, "KK6SEN", 1), None);
+    }
+
+    /// REGRESSION: an outbound connect must keep its own link. The remote's
+    /// UA/RR/I-frames are addressed to OUR callsign, so a dest-keyed listener
+    /// would steal them and the C-tab would sit in AwaitingConnect forever
+    /// (remote shows connected, we never do, Send stays disabled).
+    #[test]
+    fn live_client_session_owns_its_source_and_beats_the_listener() {
+        let mut connecting = Ax25Session::new(1);
+        connecting.remote = "KK6SEN".to_string();
+        connecting.remote_ssid = 7;
+        connecting.state = Ax25ConnState::AwaitingConnect;
+
+        let sessions = vec![
+            Ax25Session::new(0), // idle C1
+            connecting,          // C2 dialling KK6SEN-7
+            Ax25Session::new(2),
+            Ax25Session::new(3),
+        ];
+        assert!(
+            client_session_owns(&sessions, "KK6SEN", 7),
+            "AwaitingConnect still owns the source — the UA is ours"
+        );
+        assert!(
+            !client_session_owns(&sessions, "KK6SEN", 0),
+            "a different SSID is a different station"
+        );
+        assert!(
+            !client_session_owns(&sessions, "W6ABC", 7),
+            "unrelated source is free for the listener"
+        );
+
+        // Once the session is torn down the source is no longer owned.
+        let mut gone = sessions.clone();
+        gone[1].state = Ax25ConnState::Disconnected;
+        assert!(!client_session_owns(&gone, "KK6SEN", 7));
     }
 
     /// Tab allocation: first idle C-tab, skipping tabs a chat listener already
