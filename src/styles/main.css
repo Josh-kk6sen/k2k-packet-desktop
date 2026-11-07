@@ -421,6 +421,12 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #u-clear:hover{color:var(--text)!important}
 .mode-tab{padding:7px 0;flex:1;text-align:center;font-size:var(--conn-font-size);font-weight:600;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;transition:all .15s;letter-spacing:.5px;position:relative}
 .mode-tab:hover{color:var(--text);background:var(--hover)}
+/* Activity flash — an inbound connect / bell on a tab the operator isn't on. */
+@keyframes tabFlash{0%,100%{background:transparent;color:var(--text2)}50%{background:var(--green-bg);color:var(--green)}}
+.mode-tab.tab-flash{animation:tabFlash .55s ease-in-out 4}
+/* Settings → Sounds preview buttons. */
+.sound-test{background:var(--elevated);border:1px solid var(--border);border-radius:4px;color:var(--text2);padding:3px 10px;font-size:inherit;cursor:pointer;margin-left:6px}
+.sound-test:hover{color:var(--text);border-color:var(--text2)}
 .mode-tab.active{color:var(--green);border-bottom-color:var(--green);background:var(--green-bg)}
 /* Status dot inside each tab (green=connected, yellow=connecting, gray=disconnected). */
 .mode-tab .conn-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}

@@ -17,6 +17,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { playSound, initSound } from "./sound.js";
 
 // ── Element handles (same ids as index.html) ──
 const $ = (sel) => document.querySelector(sel);
@@ -67,6 +68,7 @@ const DEFAULT_SETTINGS = {
   messageBoardEnabled: false, messageBoardCallsign: "", messageBoardSsid: 1,
   messageBoardSysops: "", messageBoardPrivacy: false,
   messageBoardPublicAliases: "ALL", messageBoardMaxPacketSize: 250,
+  soundConnect: "ding", soundBell: "double", soundVolume: 70,
   theme: "dark", maxLines: 500,
   beaconEnabled: false, beacon: "", beaconInterval: 240, beaconDest: "BEACON", beaconVia: "",
   appFontSize: 18, connFontSize: -2, unprotoFontSize: -2,
@@ -161,6 +163,16 @@ function refreshTabBar() {
   });
 }
 
+// Flash a tab to signal activity on a tab the operator isn't looking at.
+function flashTab(tabIdx) {
+  const el = modeTabs[tabIdx];
+  if (!el) return;
+  el.classList.remove("tab-flash");
+  void el.offsetWidth; // restart the animation
+  el.classList.add("tab-flash");
+  setTimeout(() => el.classList.remove("tab-flash"), 2400);
+}
+
 // ── Connect button label + fixed width ──
 // The label cycles Connect → Connecting → Disconnect. The button (and the
 // topbar column it sits in) must NOT resize when the label length changes, so
@@ -206,16 +218,18 @@ async function disconnectTnc() {
 async function connectTnc() {
   const hostv = hostEl.value.trim() || "";
   const portv = parseInt(portEl.value) || 8001;
-  if (!hostv) {
-    hostEl.focus();
-    hostEl.style.borderColor = "var(--red)";
-    setTimeout(() => (hostEl.style.borderColor = ""), 2000);
-    return;
-  }
-  let callsign = settings.callsign || "";
-  if (!callsign) {
+  const callsign = (settings.callsign || "").trim();
+  // Nothing to connect with (fresh install, or a cleared field): open Settings
+  // and focus the first missing field. This check must come BEFORE the
+  // individual host/callsign checks — on a fresh install both are empty, and
+  // checking host first swallowed the callsign path entirely.
+  if (!callsign || !hostv) {
     settingsBtn.click();
-    setTimeout(() => document.getElementById("set-call").focus(), 100);
+    const focusId = !callsign ? "set-call" : "set-host";
+    setTimeout(() => {
+      const el = document.getElementById(focusId);
+      if (el) el.focus();
+    }, 100);
     return;
   }
   const parts = callsign.split("-");
@@ -896,6 +910,16 @@ const SETTING_FIELDS = [
   { id: "set-protocol", key: "protocol",
     pull: (el) => el.value,
     push: (el, v) => { el.value = v || "KISS"; } },
+  // Sounds for direct-chat alerts (incoming connect + remote :BELL / :RING).
+  { id: "set-sound-connect", key: "soundConnect",
+    pull: (el) => el.value || "ding",
+    push: (el, v) => { el.value = v || "ding"; } },
+  { id: "set-sound-bell", key: "soundBell",
+    pull: (el) => el.value || "double",
+    push: (el, v) => { el.value = v || "double"; } },
+  { id: "set-sound-volume", key: "soundVolume",
+    pull: (el) => parseInt(el.value) || 0,
+    push: (el, v) => { el.value = v ?? 70; } },
 ];
 
 function fieldsPopulate(prefs) {
@@ -947,6 +971,19 @@ settingsBtn.onclick = () => {
 
 $("#close-settings").onclick = () => settingsOverlay.classList.remove("open");
 $("#settings-cancel").onclick = () => settingsOverlay.classList.remove("open");
+
+// Sounds section: each Test button previews exactly what the selected sound
+// will play, at the volume currently set in the dialog.
+["set-sound-connect", "set-sound-bell"].forEach((id) => {
+  const btn = document.querySelector('[data-sound-test="' + id + '"]');
+  if (!btn) return;
+  btn.onclick = () => {
+    const sel = document.getElementById(id);
+    const vol = document.getElementById("set-sound-volume");
+    playSound(sel ? sel.value : "", vol ? parseInt(vol.value) : 70);
+  };
+});
+
 $("#settings-reset").onclick = async () => {
   try {
     await invoke("reset_settings");
@@ -989,7 +1026,7 @@ $("#settings-save").onclick = async () => {
 
 // ── Events from backend (Tauri emit) ──
 listen("session-connected", (ev) => {
-  const { tab, remote } = ev.payload;
+  const { tab, remote, incoming } = ev.payload;
   if (tab < TAB_COUNT) {
     tabs[tab].state = "connected";
     tabs[tab].remote = remote;
@@ -997,7 +1034,22 @@ listen("session-connected", (ev) => {
     tabs[tab].nr = 0;
     refreshTabBar();
     tabMsg(tab, "sys", `Connected to ${remote}`);
+    if (incoming) {
+      // Another station dialed our callsign: flash the tab and ding, but do
+      // NOT steal focus — the operator may be mid-QSO on another tab.
+      flashTab(tab);
+      playSound(settings.soundConnect, settings.soundVolume);
+    }
   }
+});
+
+// Remote rang the bell (:BELL / :RING) on a direct-chat tab.
+listen("chat-bell", (ev) => {
+  const { tab } = ev.payload;
+  if (tab >= TAB_COUNT) return;
+  tabMsg(tab, "sys", "*** BELL ***");
+  if (tab !== activeTab) flashTab(tab);
+  playSound(settings.soundBell, settings.soundVolume);
 });
 
 listen("session-disconnected", (ev) => {
@@ -1171,6 +1223,7 @@ document.onmouseup = () => {
 };
 
 // ── Init ──
+initSound();
 setConnStatus("idle", "Disconnected");
 sendBtn.disabled = true;
 unprotoSend.disabled = true;

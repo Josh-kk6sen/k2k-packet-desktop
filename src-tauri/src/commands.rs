@@ -741,12 +741,23 @@ pub async fn ax25_send_iframe(
         .ok_or_else(|| "Connection not found".to_string())?;
     let mut c = client_arc.lock().await;
 
-    let my_call = c.callsign.clone();
-    let my_ssid = c.ssid;
+    let client_call = c.callsign.clone();
+    let client_ssid = c.ssid;
 
-    // Extract session state we need (guards + state read in one place)
-    let (remote, remote_ssid, digis, ns, nr) =
-        session_send_state(&mut c.info.sessions[tab], &app_handle)?;
+    // A C-tab holds either an outgoing client session or an inbound
+    // direct-chat listener session — resolve which one owns this tab.
+    let loc = c
+        .loc_for_tab(tab)
+        .ok_or_else(|| "No session on this tab".to_string())?;
+
+    let (my_call, my_ssid, remote, remote_ssid, digis, ns, nr) = {
+        let session = c
+            .session_mut(loc)
+            .ok_or_else(|| "No session on this tab".to_string())?;
+        let (my_call, my_ssid) = session.my_identity(&client_call, client_ssid);
+        let (remote, remote_ssid, digis, ns, nr) = session_send_state(session, &app_handle)?;
+        (my_call, my_ssid, remote, remote_ssid, digis, ns, nr)
+    };
 
     // Format text: convert \n to \r (linpac convention), ensure trailing \r
     let info_bytes = ax25::normalize_linpac_text(&text);
@@ -782,7 +793,9 @@ pub async fn ax25_send_iframe(
 
     // Advance N(S) and store pending retry state (oldest frame only)
     let sent_ns = ns;
-    store_pending_iframe(&mut c.info.sessions[tab], &text, sent_ns);
+    if let Some(session) = c.session_mut(loc) {
+        store_pending_iframe(session, &text, sent_ns);
+    }
 
     // Read T1/N2 for the retry countdown emit below
     let t1_ms = c.t1_ms;
@@ -791,17 +804,12 @@ pub async fn ax25_send_iframe(
     // Spawn kernel T1 recovery timer if none is running (single task
     // per session; polls with RR enquiry on the kernel T1 schedule,
     // retransmits only when the peer's reply shows frames still unacked).
-    session::ensure_recovery_timer(
-        &mut c,
-        &client_arc,
-        session::SessionLoc::Tab(tab),
-        &out_handle(&app_handle),
-    );
+    session::ensure_recovery_timer(&mut c, &client_arc, loc, &out_handle(&app_handle));
 
     // Capture the invisible flag before dropping the lock — the
     // session-sent / session-retry emits below must be suppressed for
     // invisible (server) sessions.
-    let invisible = c.info.sessions[tab].invisible;
+    let invisible = c.session_ref(loc).map(|s| s.invisible).unwrap_or(false);
 
     // Drop the lock before emitting to prevent deadlock on re-entry
     drop(c);
@@ -855,11 +863,16 @@ pub async fn ax25_disconnect(
         .ok_or_else(|| "Connection not found".to_string())?;
     let mut c = client_arc.lock().await;
 
-    let my_call = c.callsign.clone();
-    let my_ssid = c.ssid;
+    let client_call = c.callsign.clone();
+    let client_ssid = c.ssid;
+    let loc = c
+        .loc_for_tab(tab)
+        .ok_or_else(|| "Not connected or connecting".to_string())?;
 
-    let (remote, remote_ssid, digis) = {
-        let session = &mut c.info.sessions[tab];
+    let (my_call, my_ssid, remote, remote_ssid, digis) = {
+        let session = c
+            .session_mut(loc)
+            .ok_or_else(|| "Not connected or connecting".to_string())?;
         // Kernel-faithful gate: DISC is valid from every established
         // state — Connected, TimerRecovery (an RR retry loop MUST be
         // tear-downable), and AwaitingConnect (an in-progress SABM
@@ -872,7 +885,10 @@ pub async fn ax25_disconnect(
         if session.state == session::Ax25ConnState::AwaitingDisconnect {
             return Ok(());
         }
+        let (my_call, my_ssid) = session.my_identity(&client_call, client_ssid);
         (
+            my_call,
+            my_ssid,
             session.remote.clone(),
             session.remote_ssid,
             session.digis.clone(),
@@ -900,7 +916,9 @@ pub async fn ax25_disconnect(
     );
 
     // Transition to AwaitingDisconnect.
-    let session = &mut c.info.sessions[tab];
+    let session = c
+        .session_mut(loc)
+        .ok_or_else(|| "Not connected or connecting".to_string())?;
     session.state = session::Ax25ConnState::AwaitingDisconnect;
     session.pending_ns = None;
 
@@ -921,7 +939,7 @@ pub async fn ax25_disconnect(
     let disc_handle = spawn_connect_retry(
         RetryTarget::Disc,
         client_arc.clone(),
-        session::SessionLoc::Tab(tab),
+        loc,
         out_handle(&app_handle),
     );
     session.disc_handle = Some(disc_handle);
@@ -1161,6 +1179,66 @@ async fn on_agw_connected(
         }
         _ => false,
     };
+    // ── Direct chat: inbound connect to the operator's own callsign ──
+    // Always on (no setting): whoever dials the callsign in the top of
+    // Settings gets the next free C-tab. Checked after the board so a
+    // board callsign collision resolves in the board's favour.
+    if !is_bbs_connect {
+        if let Some(op) = crate::kernel::output::chat_gate(app_handle) {
+            if ct_base == op.0 && ct_ssid == op.1 {
+                let mut c = client.lock().await;
+                let tab = (0..c.info.sessions.len()).find(|t| {
+                    c.info.sessions[*t].state == session::Ax25ConnState::Disconnected
+                        && c.info.sessions[*t].remote.is_empty()
+                        && !c
+                            .server_sessions
+                            .iter()
+                            .flatten()
+                            .any(|s| s.is_chat() && s.tab == *t)
+                });
+                let free = c.server_sessions.iter().position(|s| s.is_none());
+                let (Some(tab), Some(free)) = (tab, free) else {
+                    log_line(&format!(
+                        "Direct chat: connect from {} refused (all connections busy)",
+                        remote
+                    ));
+                    let d = agw::build_disconnect(0, &op.0, op.1, &remote_call, remote_ssid);
+                    let _ = send_agw_frame(&mut c, &d).await;
+                    return;
+                };
+                let mut sess = session::Ax25Session::new(tab);
+                sess.role = session::SessionRole::Server;
+                sess.kind = session::ServerKind::Chat;
+                sess.invisible = false;
+                sess.link_external = true;
+                sess.local_call = op.0.clone();
+                sess.local_ssid = op.1;
+                sess.remote = remote_call.clone();
+                sess.remote_ssid = remote_ssid;
+                sess.state = session::Ax25ConnState::Connected;
+                sess.loc = session::SessionLoc::Server(free);
+                sess.last_rx_time = Some(std::time::Instant::now());
+                c.server_sessions[free] = Some(sess);
+                log_line(&format!(
+                    "Direct chat: {} connected to {} on C{} (AGWPE)",
+                    remote,
+                    agw::fmt_display_call(&op.0, op.1),
+                    tab + 1
+                ));
+                drop(c);
+                let _ = app_handle.emit(
+                    "session-connected",
+                    serde_json::json!({
+                        "tab": tab,
+                        "remote": agw::fmt_display_call(&remote_call, remote_ssid),
+                        "incoming": true,
+                    }),
+                );
+                return;
+            }
+        }
+    }
+
     if is_bbs_connect {
         let mut c = client.lock().await;
         // Refresh the snapshot if settings changed since connect (e.g. the
@@ -1309,6 +1387,40 @@ async fn on_agw_data(
     // "input" ("Not a valid command", growing each digipeater cycle).
     // The disconnected handler keeps the bidirectional match (either side
     // may report the drop), but data routing is strictly destination-gated.
+    // ── Direct chat: inbound text on the operator-callsign listener ──
+    // Directional like the board: only frames ADDRESSED TO the operator
+    // callsign are client→us input; our own replies echo back with the
+    // operator as the SOURCE and must not be re-rendered as received text.
+    if let Some(op) = crate::kernel::output::chat_gate(app_handle) {
+        let (ct_base, ct_ssid) = agw::parse_callsign_ssid(frame.call_to.trim());
+        if ct_base == op.0 && ct_ssid == op.1 {
+            let chat_i = {
+                let c = client.lock().await;
+                agw_chat_slot(&c, frame.call_from.trim(), frame.call_to.trim(), &op)
+            };
+            if let Some(i) = chat_i {
+                let text = String::from_utf8_lossy(&frame.data)
+                    .to_string()
+                    .replace("\r\n", "\n")
+                    .replace('\r', "\n");
+                let tab = {
+                    let c = client.lock().await;
+                    c.server_sessions[i].as_ref().map(|s| s.tab)
+                };
+                if let Some(tab) = tab {
+                    let _ = app_handle.emit(
+                        "session-iframe",
+                        serde_json::json!({ "tab": tab, "text": text, "ns": 0 }),
+                    );
+                    if session::is_bell_command(&text) {
+                        let _ = app_handle.emit("chat-bell", serde_json::json!({ "tab": tab }));
+                    }
+                }
+                return;
+            }
+        }
+    }
+
     let bbs_i = {
         let c = client.lock().await;
         if !dest_is_board(
@@ -1422,6 +1534,27 @@ async fn on_agw_disconnected(
         let mut c = client.lock().await;
         c.server_sessions[i] = None;
         return;
+    }
+
+    // ── Direct chat: Direwolf dropped a chat link ──
+    if let Some(op) = crate::kernel::output::chat_gate(app_handle) {
+        let chat_i = {
+            let c = client.lock().await;
+            agw_chat_slot(&c, frame.call_from.trim(), frame.call_to.trim(), &op)
+        };
+        if let Some(i) = chat_i {
+            let mut c = client.lock().await;
+            let tab = c.server_sessions[i].as_ref().map(|s| s.tab);
+            c.server_sessions[i] = None;
+            drop(c);
+            if let Some(tab) = tab {
+                let _ = app_handle.emit(
+                    "session-disconnected",
+                    serde_json::json!({ "tab": tab, "reason": "Disconnected" }),
+                );
+            }
+            return;
+        }
     }
 
     if let Some(pos) = tab_map.iter().position(|m| {
@@ -1742,6 +1875,30 @@ fn agw_bbs_slot(c: &session::TcpClient, call_from: &str, call_to: &str) -> Optio
     })
 }
 
+/// Server-pool slot for a direct-chat link: the pair (remote, operator
+/// callsign) in either direction. Only chat sessions match — board sessions
+/// are found by `agw_bbs_slot`.
+fn agw_chat_slot(
+    c: &session::TcpClient,
+    call_from: &str,
+    call_to: &str,
+    op: &(String, u8),
+) -> Option<usize> {
+    let (cf, cfs) = agw::parse_callsign_ssid(call_from.trim());
+    let (ct, cts) = agw::parse_callsign_ssid(call_to.trim());
+    c.server_sessions.iter().position(|s| {
+        s.as_ref().is_some_and(|x| {
+            if !x.is_chat() {
+                return false;
+            }
+            let op_matches = |base: &str, ss: u8| base == op.0 && ss == op.1;
+            let remote_matches = |base: &str, ss: u8| base == x.remote && ss == x.remote_ssid;
+            (op_matches(&cf, cfs) && remote_matches(&ct, cts))
+                || (op_matches(&ct, cts) && remote_matches(&cf, cfs))
+        })
+    })
+}
+
 /// True when a frame's DESTINATION (call_to) is the board callsign. Used to
 /// gate the board-data feed: only frames addressed TO the board are treated
 /// as client→board input. Mirrors the KISS board gate (dest == board), so a
@@ -1916,14 +2073,19 @@ pub async fn agw_send_data(
         .await
         .ok_or_else(|| "Connection not found".to_string())?;
     let mut c = client_arc.lock().await;
-    let my_call = c.callsign.clone();
-    let my_ssid = c.ssid;
-    let (remote, remote_ssid) = {
-        let s = &c.info.sessions[tab];
+    let client_call = c.callsign.clone();
+    let client_ssid = c.ssid;
+    // Resolve which session owns the tab (outgoing client or inbound chat).
+    let loc = c
+        .loc_for_tab(tab)
+        .ok_or_else(|| "Not connected".to_string())?;
+    let (my_call, my_ssid, remote, remote_ssid) = {
+        let s = c.session_mut(loc).ok_or_else(|| "Not connected".to_string())?;
         if s.state != session::Ax25ConnState::Connected {
             return Err("Not connected".to_string());
         }
-        (s.remote.clone(), s.remote_ssid)
+        let (my_call, my_ssid) = s.my_identity(&client_call, client_ssid);
+        (my_call, my_ssid, s.remote.clone(), s.remote_ssid)
     };
 
     let info_bytes = ax25::normalize_linpac_text(&text);
@@ -1989,15 +2151,19 @@ pub async fn agw_disconnect(
         .await
         .ok_or_else(|| "Connection not found".to_string())?;
     let mut c = client_arc.lock().await;
-    let my_call = c.callsign.clone();
-    let my_ssid = c.ssid;
-    let (remote, remote_ssid, connected) = {
-        let s = &mut c.info.sessions[tab];
+    let client_call = c.callsign.clone();
+    let client_ssid = c.ssid;
+    let loc = c
+        .loc_for_tab(tab)
+        .ok_or_else(|| "Not connected".to_string())?;
+    let (my_call, my_ssid, remote, remote_ssid, connected) = {
         // Kernel-faithful gate: allow disconnect from every established
         // state, including TimerRecovery (an RR retry loop MUST be
         // tear-downable). Only a fully idle session is refused.
+        let s = c.session_mut(loc).ok_or_else(|| "Not connected".to_string())?;
         let connected = s.state != session::Ax25ConnState::Disconnected;
-        (s.remote.clone(), s.remote_ssid, connected)
+        let (my_call, my_ssid) = s.my_identity(&client_call, client_ssid);
+        (my_call, my_ssid, s.remote.clone(), s.remote_ssid, connected)
     };
     if !connected {
         return Err("Not connected".to_string());
@@ -2027,6 +2193,26 @@ pub async fn agw_disconnect(
             "",
             true,
         );
+    }
+
+    // A direct-chat listener session lives in the server pool — drop it there
+    // (and clear its C-tab). Direwolf's RSP_DISCONNECTED arrives later and
+    // finds no slot, which is harmless.
+    if let session::SessionLoc::Server(i) = loc {
+        let tab_no = c
+            .server_sessions
+            .get(i)
+            .and_then(|o| o.as_ref())
+            .map(|s| s.tab);
+        c.server_sessions[i] = None;
+        drop(c);
+        if let Some(t) = tab_no {
+            let _ = app_handle.emit(
+                "session-disconnected",
+                serde_json::json!({ "tab": t, "reason": "Disconnect requested" }),
+            );
+        }
+        return Ok(());
     }
 
     c.info.sessions[tab].state = session::Ax25ConnState::Disconnected;

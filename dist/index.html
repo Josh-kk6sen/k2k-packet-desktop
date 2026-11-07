@@ -723,7 +723,7 @@ if(!window.__TAURI_INTERNALS__){
   }
 }
 </script>
-  <script type="module" crossorigin src="/assets/index-BJQwYzGY.js"></script>
+  <script type="module" crossorigin src="/assets/index-DVNbxsYh.js"></script>
 </head>
 <body>
 <div id="app">
@@ -749,7 +749,7 @@ if(!window.__TAURI_INTERNALS__){
       <button class="settings-btn" id="help-btn" title="How to use">&#63;</button>
       <button class="settings-btn" id="log-btn" title="Open log folder" onclick="openLogDir()">&#128194;</button>
       <button class="settings-btn" id="settings-btn">&#9881;</button>
-      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.27</span>
+      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.28</span>
     </div>
     <script>{!function(){try{if(window.__TAURI__)__TAURI__.app.getVersion().then(function(v){var e=document.getElementById('app-version');if(e)e.textContent='v'+v})}catch(e){}}()}</script>
   </div>
@@ -922,6 +922,31 @@ if(!window.__TAURI_INTERNALS__){
         <div class="sr"><label>Privacy Mode <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Users only see mail to/from them or public aliases</span></label><input id="set-mb-privacy" type="checkbox" onchange="var r=document.getElementById('mb-aliases-row');if(r)r.style.display=this.checked?'':'none'" /></div>
         <div id="mb-aliases-row" style="display:none"><div class="sr"><label>Public Aliases <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Group destinations anyone can read (comma separated; ALL included by default)</span></label><input id="set-mb-aliases" placeholder="ALL, TECH, PKTNET" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" /></div></div>
         <div class="sr"><label>Max Packet Size <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Bytes per outgoing board packet (32–256, default 250). 250 fills VHF packets; use 64–128 on HF or weak paths where long frames are fragile.</span></label><input id="set-mb-maxpacket" type="number" min="32" max="256" value="250" /></div>
+      </div>
+      <div class="sg"><h3>Sounds</h3>
+        <div class="sr"><label>Incoming Connect <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Plays when another station connects to your callsign</span></label>
+          <select id="set-sound-connect" class="theme-select">
+            <option value="none">None</option>
+            <option value="ding" selected>Ding</option>
+            <option value="double">Double Ding</option>
+            <option value="chime">Chime</option>
+            <option value="beep">Beep</option>
+            <option value="chirp">Chirp</option>
+          </select>
+          <button type="button" class="sound-test" data-sound-test="set-sound-connect">Test</button>
+        </div>
+        <div class="sr"><label>Bell (:BELL) <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">Plays when a connected station sends :BELL or :RING</span></label>
+          <select id="set-sound-bell" class="theme-select">
+            <option value="none">None</option>
+            <option value="ding">Ding</option>
+            <option value="double" selected>Double Ding</option>
+            <option value="chime">Chime</option>
+            <option value="beep">Beep</option>
+            <option value="chirp">Chirp</option>
+          </select>
+          <button type="button" class="sound-test" data-sound-test="set-sound-bell">Test</button>
+        </div>
+        <div class="sr"><label>Volume <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 3px)">0 = silent</span></label><input id="set-sound-volume" type="range" min="0" max="100" step="5" value="70" /></div>
       </div>
       <div class="sg"><h3>Debug</h3>
         <div class="sr"><label>Debug TX frames (Unproto) <span style="color:var(--muted);font-size:calc(var(--app-font-size) - 2px)">(KISS protocol only)</span></label><input id="set-debugtx" type="checkbox" /></div>
