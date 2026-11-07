@@ -152,6 +152,13 @@ function tabMsg(tabIdx, dir, text) {
   if (tabIdx === activeTab) renderTab(tabIdx);
 }
 
+// Format a station as CALL-SSID (SSID 0 shows as a bare callsign, the AX.25
+// display convention). Used everywhere a station is labelled in the UI.
+function fmtCall(base, ssid) {
+  const n = Number(ssid);
+  return base && n > 0 ? `${base}-${n}` : base || "";
+}
+
 // refresh the tab-bar state dots + labels
 function refreshTabBar() {
   modeTabs.forEach((t, e) => {
@@ -159,7 +166,14 @@ function refreshTabBar() {
     const dot = t.querySelector(".conn-dot");
     const label = t.querySelector(".remote-label");
     dot.className = "conn-dot " + (st === "connected" ? "green" : st === "connecting" ? "yellow" : "gray");
-    label.textContent = st === "connected" ? " - " + (tabs[e].digis && tabs[e].digis.length ? tabs[e].digis[0] : tabs[e].remote) : "";
+    // The label is the station we are talking TO. The digipeater path is
+    // context, not identity — it belongs in the tooltip, never in place of
+    // the destination (a via-path connect used to read "- KBANN").
+    label.textContent = st === "connected" ? " - " + tabs[e].remote : "";
+    t.title =
+      st === "connected" && tabs[e].digis && tabs[e].digis.length
+        ? `${tabs[e].remote} via ${tabs[e].digis.join(" ")}`
+        : "";
   });
 }
 
@@ -1026,14 +1040,17 @@ $("#settings-save").onclick = async () => {
 
 // ── Events from backend (Tauri emit) ──
 listen("session-connected", (ev) => {
-  const { tab, remote, incoming } = ev.payload;
+  const { tab, remote, remote_ssid, incoming } = ev.payload;
   if (tab < TAB_COUNT) {
+    // The client path sends base + ssid separately; the chat-listener path
+    // sends an already-formatted call. fmtCall handles both.
+    const who = fmtCall(remote, remote_ssid);
     tabs[tab].state = "connected";
-    tabs[tab].remote = remote;
+    tabs[tab].remote = who;
     tabs[tab].ns = 0;
     tabs[tab].nr = 0;
     refreshTabBar();
-    tabMsg(tab, "sys", `Connected to ${remote}`);
+    tabMsg(tab, "sys", `Connected to ${who}`);
     if (incoming) {
       // Another station dialed our callsign: flash the tab and ding, but do
       // NOT steal focus — the operator may be mid-QSO on another tab.
