@@ -84,6 +84,10 @@ pub struct AppSettings {
     pub message_board_privacy: bool,         // Users see only their own + public mail
     pub message_board_public_aliases: String, // Comma-separated public groups (ALL by default)
     pub message_board_max_packet_size: u32,  // Max info bytes per board output frame (default 250; 32–256)
+    // ── Sounds (direct-chat alerts) ──
+    pub sound_connect: String,               // sound played when a station connects to us ("none" | ding | double | chime | beep | chirp)
+    pub sound_bell: String,                  // sound played on a remote :BELL / :RING
+    pub sound_volume: u32,                   // 0–100
 }
 
 impl Default for AppSettings {
@@ -135,6 +139,9 @@ impl Default for AppSettings {
             message_board_privacy: false,
             message_board_public_aliases: "ALL".to_string(),
             message_board_max_packet_size: 250,
+            sound_connect: "ding".to_string(),
+            sound_bell: "double".to_string(),
+            sound_volume: 70,
         }
     }
 }
@@ -273,6 +280,24 @@ fn default_missing_unproto_destinations(json: &mut serde_json::Value) {
             );
         }
     }
+}
+
+/// The operator's own AX.25 identity from the top-of-settings callsign field,
+/// as (base callsign, SSID). `None` when no callsign is configured.
+///
+/// This is the address the direct-chat listener answers on. The string may
+/// carry an SSID ("KK6SEN-15"); a bare callsign means SSID 0, which is the
+/// AX.25 default the rest of the app already assumes.
+pub fn operator_identity(s: &AppSettings) -> Option<(String, u8)> {
+    let raw = s.callsign.trim().to_uppercase();
+    if raw.is_empty() {
+        return None;
+    }
+    let (base, ssid) = split_callsign_ssid(&raw);
+    if base.is_empty() {
+        return None;
+    }
+    Some((base.to_string(), ssid.unwrap_or(0)))
 }
 
 /// Split a "CALL-N" string into (base callsign, SSID): the SSID is the

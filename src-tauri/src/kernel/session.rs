@@ -55,6 +55,29 @@ impl Default for SessionRole {
     }
 }
 
+/// Which listener a Server-role session belongs to. Server sessions are the
+/// only sessions that answer inbound connects, and the app has exactly two
+/// listeners: the message board (a callsign of its own) and direct chat (the
+/// operator's own callsign, surfaced in a C-tab).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ServerKind {
+    /// Message board (PBBS) — invisible, engine-driven, own callsign.
+    #[default]
+    Board,
+    /// Direct chat — visible in a C-tab, plain text, operator's callsign.
+    Chat,
+}
+
+/// What a caller hears when every listener slot / C-tab is in use.
+pub const CHAT_BUSY_TEXT: &str = "*** ALL CONNECTIONS BUSY - TRY AGAIN LATER ***";
+
+/// Remote-triggered bell commands for a direct-chat tab. Case-insensitive and
+/// whitespace-tolerant — `:bell`, `:Bell`, `:RING` and `:ring` all ring.
+pub fn is_bell_command(text: &str) -> bool {
+    let t = text.trim();
+    t.eq_ignore_ascii_case(":BELL") || t.eq_ignore_ascii_case(":RING")
+}
+
 // `Ax25Session` derives `Debug` and carries `Option<crate::bbs::BbsSession>`.
 // `BbsSession` has no derives of its own; give it a local Debug impl here so
 // bbs.rs stays untouched (pure plumbing — a board session's engine handle
@@ -157,6 +180,16 @@ pub struct Ax25Session {
     /// paints a C-tab window. All C-tabs are visible.
     #[serde(skip)]
     pub invisible: bool,
+    /// Which listener owns this session (server sessions only) — `Board` for
+    /// the message board, `Chat` for the operator-callsign direct listener.
+    #[serde(skip)]
+    pub kind: ServerKind,
+    /// The identity this session answers as: the address the peer dialed.
+    /// Server sessions only; C-tabs transmit as the client callsign instead.
+    #[serde(skip)]
+    pub local_call: String,
+    #[serde(skip)]
+    pub local_ssid: u8,
     /// Direwolf owns the link state (AGW sessions): the kernel skips
     /// timers/retransmission and only the BBS engine runs.
     #[serde(skip)]
@@ -216,6 +249,9 @@ impl Ax25Session {
             n2count: 0,
             role: SessionRole::Client,
             invisible: false,
+            kind: ServerKind::Board,
+            local_call: String::new(),
+            local_ssid: 0,
             link_external: false,
             bbs: None,
             pending_out: std::collections::VecDeque::new(),
@@ -260,6 +296,22 @@ impl Ax25Session {
         // link re-establishment, where T3 supervision must keep running
         // (the keepalive task self-terminates when the state leaves
         // Connected; teardown paths abort it explicitly).
+    }
+
+    /// A direct-chat listener session: visible in a C-tab, no BBS engine.
+    pub fn is_chat(&self) -> bool {
+        self.role == SessionRole::Server && self.kind == ServerKind::Chat
+    }
+
+    /// The identity this session transmits as. A server session answers as the
+    /// address the peer actually dialed (board callsign, or the operator's own
+    /// callsign for a chat listener); C-tabs use the client callsign.
+    pub fn my_identity(&self, client_call: &str, client_ssid: u8) -> (String, u8) {
+        if self.role == SessionRole::Server && !self.local_call.is_empty() {
+            (self.local_call.clone(), self.local_ssid)
+        } else {
+            (client_call.to_string(), client_ssid)
+        }
     }
 
     /// Clear the pending I-frame state and notify the UI that N(R) `nr` was
@@ -331,6 +383,9 @@ impl Clone for Ax25Session {
             n2count: self.n2count,
             role: self.role,
             invisible: self.invisible,
+            kind: self.kind,
+            local_call: self.local_call.clone(),
+            local_ssid: self.local_ssid,
             link_external: self.link_external,
             // Engine handle is not Clone — a clone carries no live engine.
             bbs: None,
@@ -489,6 +544,34 @@ impl TcpClient {
             SessionLoc::Tab(tab) => self.info.sessions.get_mut(tab),
             SessionLoc::Server(i) => self.server_sessions.get_mut(i).and_then(|o| o.as_mut()),
         }
+    }
+
+    /// Resolve the session that owns a C-tab index: a live client session on
+    /// that tab, otherwise a direct-chat listener session bound to it. `None`
+    /// for an idle tab.
+    ///
+    /// Listener sessions live in `server_sessions` (that's what supervises the
+    /// link) but present a C-tab, so every UI-facing command resolves through
+    /// here instead of indexing `info.sessions`.
+    pub fn loc_for_tab(&self, tab: usize) -> Option<SessionLoc> {
+        let t = self.info.sessions.get(tab)?;
+        if t.state != Ax25ConnState::Disconnected {
+            return Some(SessionLoc::Tab(tab));
+        }
+        // Idle client tab: an inbound chat listener may be bound to it.
+        if let Some(i) = self
+            .server_sessions
+            .iter()
+            .position(|s| s.as_ref().is_some_and(|x| x.is_chat() && x.tab == tab))
+        {
+            return Some(SessionLoc::Server(i));
+        }
+        // A disconnected client tab can still hold a stale remote label; it
+        // owns the tab until a chat listener claims it.
+        if !t.remote.is_empty() {
+            return Some(SessionLoc::Tab(tab));
+        }
+        None
     }
 
     /// Build a client with 4 empty sessions (C1–C4) and no tasks running.
@@ -734,13 +817,9 @@ pub async fn send_rr_enquiry(
         return false;
     };
     let (remote, remote_ssid, digis, nr) = (s.remote.clone(), s.remote_ssid, s.digis.clone(), s.nr);
-    // A Server-role (message-board) session polls as the board callsign —
-    // the address the peer actually dialed (same rule as the old bbs_link).
-    let (my_call, my_ssid) = if s.role == SessionRole::Server {
-        (c.bbs_callsign.clone(), c.bbs_ssid)
-    } else {
-        (c.callsign.clone(), c.ssid)
-    };
+    // A Server-role session polls as the address the peer dialed (board
+    // callsign, or the operator's callsign for a chat listener).
+    let (my_call, my_ssid) = s.my_identity(&c.callsign, c.ssid);
     let rr_control = 0x11 | (nr << 5);
     let mut rr_frame =
         ax25::encode_ax25_header(&remote, remote_ssid, &my_call, my_ssid, true, &digis);
@@ -785,19 +864,18 @@ pub fn spawn_t2_timer(
         let remote_ssid = s.remote_ssid;
         let digis = s.digis.clone();
         let nr = s.rr_target_nr;
-        let role = s.role;
 
         // Clear pending flag (no longer borrowing session)
         if let Some(s) = c.session_mut(loc) {
             s.rr_pending = false;
         }
 
-        // Server-role sessions ack as the board callsign (the address the
-        // peer dialed) — same rule as the old bbs_link.
-        let (my_call, my_ssid) = if role == SessionRole::Server {
-            (c.bbs_callsign.clone(), c.bbs_ssid)
-        } else {
-            (c.callsign.clone(), c.ssid)
+        // Server-role sessions ack as the address the peer dialed.
+        let (my_call, my_ssid) = {
+            let Some(s) = c.session_ref(loc) else {
+                return;
+            };
+            s.my_identity(&c.callsign, c.ssid)
         };
 
         // Build and send RR with current N(R)
@@ -1013,11 +1091,12 @@ pub fn spawn_recovery_timer(
                     if n2count >= n2_max {
                         // Kernel state 4 T1 expiry with n2count == N2:
                         // DM(P=1, RESPONSE) then disconnect (ETIMEDOUT).
-                        // Server-role sessions DM as the board callsign.
-                        let (my_call, my_ssid) = if role == SessionRole::Server {
-                            (c.bbs_callsign.clone(), c.bbs_ssid)
-                        } else {
-                            (c.callsign.clone(), c.ssid)
+                        // Server-role sessions DM as the address the peer dialed.
+                        let (my_call, my_ssid) = {
+                            let Some(s) = c.session_ref(loc) else {
+                                break;
+                            };
+                            s.my_identity(&c.callsign, c.ssid)
                         };
                         let dm = ax25::build_ax25_frame(
                             &remote,
@@ -1365,44 +1444,62 @@ async fn handle_ax25_frame(
         false,
     );
 
-    // ── Message board routing ──
-    // Frames addressed to the board callsign belong to the BBS, never to
-    // the C-tabs — a station connected to both would otherwise be
-    // double-processed (tabs match by src, the BBS by dest).
+    // ── Inbound listener routing (dest-keyed) ──
+    // Two listeners answer inbound connects: the message board (its own
+    // callsign) and direct chat (the operator's callsign from the top of
+    // Settings). Routing by DEST is what keeps a station connected to both a
+    // C-tab and a listener from being double-processed — tabs match by src.
     //
-    // The gate reads settings from DISK on every frame (cheap at 1200 baud),
-    // so enabling or changing the board mid-session takes effect without a
-    // reconnect — the old connect-time snapshot left a board enabled after
-    // connect silently unresponsive.
-    let is_bbs_frame = {
-        let mut c = client_arc.lock().await;
-        match crate::kernel::output::bbs_gate(app_handle.as_ref()) {
-            crate::bbs_link::BbsGate::Enabled(call, ssid) if dest == call && dest_ssid == ssid => {
-                if !c.bbs_enabled || c.bbs_callsign != call || c.bbs_ssid != ssid {
+    // The gates read settings from DISK on every frame (cached 1s), so
+    // enabling or changing a listener mid-session takes effect without a
+    // reconnect. The board wins when both listeners are configured to the
+    // same callsign+SSID.
+    let route: Option<ServerKind> = {
+        let gate = crate::kernel::output::bbs_gate(app_handle.as_ref());
+        let board_hit = matches!(
+            &gate,
+            crate::bbs_link::BbsGate::Enabled(call, ssid) if dest == call && dest_ssid == *ssid
+        );
+        if board_hit {
+            let mut c = client_arc.lock().await;
+            if let crate::bbs_link::BbsGate::Enabled(call, ssid) = &gate {
+                if !c.bbs_enabled || &c.bbs_callsign != call || c.bbs_ssid != *ssid {
                     app_handle.log_line(&format!(
                         "Message board: listener for {} active (settings picked up mid-session)",
                         call
                     ));
                     c.refresh_bbs_setup(app_handle.as_ref());
                 }
-                true
             }
-            crate::bbs_link::BbsGate::Disabled(call, ssid)
-                if dest == call && dest_ssid == ssid && crate::ax25::is_sabm_ctl(control) =>
-            {
+            Some(ServerKind::Board)
+        } else if let crate::bbs_link::BbsGate::Disabled(call, ssid) = &gate {
+            if dest == call && dest_ssid == *ssid && crate::ax25::is_sabm_ctl(control) {
                 app_handle.log_line(&format!(
                     "Message board: ignoring SABM from {}-{} to {} (board disabled)",
                     src, src_ssid, call
                 ));
-                false
+                None
+            } else {
+                chat_target(app_handle, dest, dest_ssid)
             }
-            _ => false,
+        } else {
+            chat_target(app_handle, dest, dest_ssid)
         }
     };
-    if is_bbs_frame {
-        route_bbs_frame(
-            app_handle, client_arc, dest, dest_ssid, src, src_ssid, digis, control, info,
-            frame_type, src_c_bit,
+    if let Some(kind) = route {
+        route_server_frame(
+            app_handle,
+            client_arc,
+            kind,
+            dest,
+            dest_ssid,
+            src,
+            src_ssid,
+            digis,
+            control,
+            info,
+            frame_type,
+            src_c_bit,
         )
         .await;
         return;
@@ -1416,26 +1513,134 @@ async fn handle_ax25_frame(
     .await;
 }
 
-/// Find the server pool slot holding a session for `(src, src_ssid)`.
-///
-/// Pure (no I/O) so the router's slot resolution is unit-testable.
-fn server_slot_for(sessions: &[Option<Ax25Session>], src: &str, src_ssid: u8) -> Option<usize> {
+/// Find the server pool slot holding a session for this exact LINK:
+/// `(src, src_ssid) → (dest, dest_ssid)`. Both ends are part of the key
+/// because one station can legitimately be connected to the board AND to the
+/// operator's callsign at the same time — keying on the source alone made the
+/// second connect look like a re-establish of the first.
+fn server_slot_for(
+    sessions: &[Option<Ax25Session>],
+    src: &str,
+    src_ssid: u8,
+    dest: &str,
+    dest_ssid: u8,
+) -> Option<usize> {
     sessions.iter().position(|s| {
-        s.as_ref()
-            .is_some_and(|x| x.remote == src && x.remote_ssid == src_ssid)
+        s.as_ref().is_some_and(|x| {
+            x.remote == src
+                && x.remote_ssid == src_ssid
+                && x.local_call == dest
+                && x.local_ssid == dest_ssid
+        })
     })
 }
 
-/// Route an inbound frame addressed to the board callsign (KISS mode).
+/// Does the operator-callsign chat listener own this destination?
+fn chat_target(
+    app_handle: &std::sync::Arc<dyn crate::kernel::output::KernelOutput>,
+    dest: &str,
+    dest_ssid: u8,
+) -> Option<ServerKind> {
+    match crate::kernel::output::chat_gate(app_handle.as_ref()) {
+        Some((call, ssid)) if dest == call && dest_ssid == ssid => Some(ServerKind::Chat),
+        _ => None,
+    }
+}
+
+/// First C-tab with nothing on it — no live session and no chat listener
+/// already bound to it. This is the "next available connected-mode tab".
+fn free_chat_tab(c: &TcpClient) -> Option<usize> {
+    pick_free_chat_tab(&c.info.sessions, &c.server_sessions)
+}
+
+/// Pure tab picker (unit-testable without a live `TcpClient`).
+fn pick_free_chat_tab(
+    sessions: &[Ax25Session],
+    pool: &[Option<Ax25Session>],
+) -> Option<usize> {
+    let bound: Vec<usize> = pool
+        .iter()
+        .flatten()
+        .filter(|s| s.is_chat())
+        .map(|s| s.tab)
+        .collect();
+    (0..sessions.len()).find(|t| sessions[*t].state == Ax25ConnState::Disconnected && !bound.contains(t))
+}
+
+/// Refuse an inbound chat connect with a readable reason.
+///
+/// AX.25's DM carries no text, so a bare refuse leaves the caller staring at
+/// "busy/disconnected" with no explanation. Instead: UA (accept), one I-frame
+/// with the reason, then DISC — the caller's terminal prints the line and
+/// then drops the link.
+async fn refuse_chat_busy(
+    c: &mut TcpClient,
+    app_handle: &std::sync::Arc<dyn crate::kernel::output::KernelOutput>,
+    dest: &str,
+    dest_ssid: u8,
+    src: &str,
+    src_ssid: u8,
+    digis: &[(String, u8, bool)],
+) {
+    let via: Vec<String> = digis
+        .iter()
+        .map(|(d, s, _)| ax25::fmt_call(d, *s))
+        .collect();
+    let ua = ax25::build_ax25_frame(src, src_ssid, dest, dest_ssid, ax25::UA, 0xF0, &[], &via, false);
+    emit_tx_frame(app_handle.as_ref(), &ua);
+    let _ = kiss::send_kiss(c, &ua).await;
+
+    let info = ax25::normalize_linpac_text(crate::kernel::session::CHAT_BUSY_TEXT);
+    let iframe = ax25::build_iframe(src, src_ssid, dest, dest_ssid, 0, 0, &info, &via);
+    emit_tx_frame(app_handle.as_ref(), &iframe);
+    let _ = kiss::send_kiss(c, &iframe).await;
+
+    // Small gap so the caller's stack processes (and prints) the text before
+    // the disconnect lands. No session exists to supervise the retransmission,
+    // so this is deliberately fire-and-forget.
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    let disc =
+        ax25::build_ax25_frame(src, src_ssid, dest, dest_ssid, ax25::DISC, 0xF0, &[], &via, false);
+    emit_tx_frame(app_handle.as_ref(), &disc);
+    let _ = kiss::send_kiss(c, &disc).await;
+}
+
+/// Announce a direct-chat listener session to the UI so its C-tab lights up.
+/// Called after the state machine has accepted the SABM (state → Connected).
+async fn emit_chat_connected(
+    client_arc: &Arc<Mutex<TcpClient>>,
+    loc: SessionLoc,
+    app_handle: &std::sync::Arc<dyn crate::kernel::output::KernelOutput>,
+) {
+    let c = client_arc.lock().await;
+    let Some(s) = c.session_ref(loc) else {
+        return;
+    };
+    if !s.is_chat() || s.state != Ax25ConnState::Connected {
+        return;
+    }
+    let _ = app_handle.emit(
+        "session-connected",
+        serde_json::json!({
+            "tab": s.tab,
+            "remote": ax25::fmt_call(&s.remote, s.remote_ssid),
+            "incoming": true,
+        }),
+    );
+}
+
+/// Route an inbound frame addressed to one of the listeners (KISS mode).
 ///
 /// Server sessions live in the `server_sessions` pool and ride the SAME
 /// kernel state machine as the C-tabs (`run_state_machine` with
 /// `SessionLoc::Server(i)`). The kernel state-0 SABM accept (A4) handles
-/// UA + banner + prompt; the kernel handles everything after that
-/// (I-frame ACK/retransmit, REJ/RR, T1/T2/T3, DISC teardown).
-async fn route_bbs_frame(
+/// UA + banner/prompt (board) or UA + tab (chat); the kernel handles
+/// everything after that (I-frame ACK/retransmit, REJ/RR, T1/T2/T3,
+/// DISC teardown).
+async fn route_server_frame(
     app_handle: &std::sync::Arc<dyn crate::kernel::output::KernelOutput>,
     client_arc: &Arc<Mutex<TcpClient>>,
+    kind: ServerKind,
     dest: &str,
     dest_ssid: u8,
     src: &str,
@@ -1449,8 +1654,21 @@ async fn route_bbs_frame(
     let is_sabm = crate::ax25::is_sabm_ctl(control);
     let mut c = client_arc.lock().await;
 
-    // Resolve the pool slot for this source (one session per connected user).
-    let slot = server_slot_for(&c.server_sessions, src, src_ssid);
+    // Reap finished listener sessions first: an own-DISC that was confirmed
+    // (or a timeout teardown) leaves a dead session holding a pool slot and a
+    // C-tab. A session with no remote never carries traffic, so it is safe to
+    // drop — the peer's next SABM creates a fresh one.
+    for slot in c.server_sessions.iter_mut() {
+        let dead = slot
+            .as_ref()
+            .is_some_and(|s| s.state == Ax25ConnState::Disconnected && s.remote.is_empty());
+        if dead {
+            *slot = None;
+        }
+    }
+
+    // Resolve the pool slot for this link (one session per connected user).
+    let slot = server_slot_for(&c.server_sessions, src, src_ssid, dest, dest_ssid);
 
     if is_sabm {
         if let Some(i) = slot {
@@ -1475,21 +1693,40 @@ async fn route_bbs_frame(
             .await;
             // A4's state-0 accept sends UA but can't spawn keepalive (no
             // client_arc in the handler) — do it here so T3 idle supervision
-            // works for board users.
+            // works.
+            if kind == ServerKind::Chat {
+                emit_chat_connected(client_arc, loc, app_handle).await;
+            }
             ensure_server_keepalive(client_arc, loc, app_handle).await;
             return;
         }
-        let busy = c.server_sessions.iter().flatten().count() >= crate::bbs_link::MAX_BBS_SESSIONS;
-        if busy {
-            // No free slot — DM (kernel: no listener capacity). Answer as
-            // the BOARD callsign (the frame was addressed to it) and
-            // preserve the digi path so the peer behind digis receives it.
+
+        // Capacity: the shared pool (what supervises the link) AND, for a
+        // chat listener, a free C-tab (where the operator talks). Either
+        // limit exhausted ⇒ refuse.
+        let chat_tab = if kind == ServerKind::Chat {
+            free_chat_tab(&c)
+        } else {
+            None
+        };
+        let pool_full = c.server_sessions.iter().all(|s| s.is_some());
+        let capped = pool_full || (kind == ServerKind::Chat && chat_tab.is_none());
+
+        if capped {
             crate::commands::log_line(&format!(
-                "Message board: connect from {}-{} refused ({} users max)",
+                "{}: connect from {}-{} refused (all connections busy)",
+                if kind == ServerKind::Chat { "Direct chat" } else { "Message board" },
                 src,
-                src_ssid,
-                crate::bbs_link::MAX_BBS_SESSIONS
+                src_ssid
             ));
+            if kind == ServerKind::Chat {
+                // The caller is told why, then disconnected.
+                refuse_chat_busy(&mut c, app_handle, dest, dest_ssid, src, src_ssid, digis).await;
+                return;
+            }
+            // Board: DM (kernel: no listener capacity). Answer as the BOARD
+            // callsign (the frame was addressed to it) and preserve the digi
+            // path so the peer behind digis receives it.
             let via: Vec<String> = digis
                 .iter()
                 .map(|(d, s, _)| ax25::fmt_call(d, *s))
@@ -1510,33 +1747,56 @@ async fn route_bbs_frame(
             let _ = kiss::send_kiss(&mut c, &dm_frame).await;
             return;
         }
+
         // Room — create the Server-role session in state 0; the kernel
-        // accept (A4) sends UA, records heard, queues banner + prompt.
+        // accept (A4) sends UA, records heard, and queues either the board
+        // banner + prompt or the chat tab's connected event.
         let free = c.server_sessions.iter().position(|s| s.is_none()).unwrap();
-        crate::commands::log_line(&format!(
-            "Message board: {} connected to board callsign ({} of {} users)",
-            src,
-            c.server_sessions.iter().flatten().count() + 1,
-            crate::bbs_link::MAX_BBS_SESSIONS
-        ));
         let digi_calls: Vec<String> = digis
             .iter()
             .map(|(d, s, _)| ax25::fmt_call(d, *s))
             .collect();
-        let mut sess = Ax25Session::new(0);
+        let mut sess = Ax25Session::new(chat_tab.unwrap_or(0));
         sess.role = SessionRole::Server;
-        sess.invisible = true;
-        sess.link_external = false;
-        let mut engine = crate::bbs::BbsSession::new(src);
-        engine.path = digi_calls.clone();
-        sess.bbs = Some(engine);
+        sess.kind = kind;
+        sess.local_call = dest.to_string();
+        sess.local_ssid = dest_ssid;
         sess.remote = src.to_string();
         sess.remote_ssid = src_ssid;
-        sess.digis = digi_calls;
+        sess.digis = digi_calls.clone();
         sess.loc = SessionLoc::Server(free);
         sess.max_packet_size = c.max_packet_size;
         sess.state = Ax25ConnState::Disconnected; // state 0 — A4 accepts the SABM
         sess.last_rx_time = Some(std::time::Instant::now());
+        match kind {
+            ServerKind::Board => {
+                sess.invisible = true;
+                sess.link_external = false;
+                let mut engine = crate::bbs::BbsSession::new(src);
+                engine.path = digi_calls;
+                sess.bbs = Some(engine);
+                crate::commands::log_line(&format!(
+                    "Message board: {} connected to board callsign ({} of {} users)",
+                    src,
+                    c.server_sessions.iter().flatten().count() + 1,
+                    crate::bbs_link::MAX_BBS_SESSIONS
+                ));
+            }
+            ServerKind::Chat => {
+                // Visible in a C-tab, no engine: plain text both ways.
+                sess.invisible = false;
+                sess.link_external = false;
+                sess.bbs = None;
+                crate::commands::log_line(&format!(
+                    "Direct chat: {}-{} connected to {}-{} on C{}",
+                    src,
+                    src_ssid,
+                    dest,
+                    dest_ssid,
+                    sess.tab + 1
+                ));
+            }
+        }
         let loc = SessionLoc::Server(free);
         c.server_sessions[free] = Some(sess);
         drop(c);
@@ -1555,11 +1815,14 @@ async fn route_bbs_frame(
             Some(loc),
         )
         .await;
+        if kind == ServerKind::Chat {
+            emit_chat_connected(client_arc, loc, app_handle).await;
+        }
         ensure_server_keepalive(client_arc, loc, app_handle).await;
         return;
     }
 
-    // Non-SABM frame for the board.
+    // Non-SABM frame for a live listener session.
     if let Some(i) = slot {
         // Data / supervision for a live session — kernel handles it.
         let loc = SessionLoc::Server(i);
@@ -1581,12 +1844,13 @@ async fn route_bbs_frame(
         .await;
         return;
     }
-    // Connected remote's traffic finding no session means something tore
-    // the link down — log it (matches old bbs_link behavior: logs every
-    // non-SABM orphan frame).
+    // A connected remote's traffic finding no session means something tore
+    // the link down — log it (matches old bbs_link behavior).
     crate::commands::log_line(&format!(
-        "Message board: traffic from {}-{} with no live session (link torn down?)",
-        src, src_ssid
+        "{}: traffic from {}-{} with no live session (link torn down?)",
+        if kind == ServerKind::Chat { "Direct chat" } else { "Message board" },
+        src,
+        src_ssid
     ));
 }
 
@@ -1964,6 +2228,8 @@ enum Effect {
     SpawnSabmRetry(SessionLoc, tokio::task::JoinHandle<()>),
     /// Abort + replace the T1 recovery timer (kernel T1 restart after requeue)
     RestartRecovery(SessionLoc, tokio::task::JoinHandle<()>),
+    /// Emit a UI event from inside a session handler (no client access needed).
+    Emit(&'static str, serde_json::Value),
     /// Feed a received I-frame's text into the session's BBS engine
     /// (server sessions only). Executed with full TcpClient access so the
     /// engine can use the BBS store/config; reply lines are queued into
@@ -2138,6 +2404,9 @@ impl DeferredOps {
                 }
                 Effect::DrainOutput(loc) => {
                     send_one_output_chunk(c, client_arc, loc, app_handle, my_callsign, my_ssid).await;
+                }
+                Effect::Emit(event, payload) => {
+                    let _ = app_handle.emit(event, payload);
                 }
             }
         }
@@ -2480,6 +2749,15 @@ impl Ax25Session {
             let txt = ax25::info_to_string(info);
             let txt = txt.replace("\r\n", "\n").replace('\r', "\n");
             if !txt.is_empty() {
+                if self.is_chat() && is_bell_command(&txt) {
+                    // Remote rang the bell — the UI plays the bell sound and
+                    // writes a "*** BELL ***" line into that tab. The text
+                    // itself still displays, so the transcript stays honest.
+                    deferred.push(Effect::Emit(
+                        "chat-bell",
+                        serde_json::json!({ "tab": self.tab }),
+                    ));
+                }
                 if self.bbs.is_some() {
                     // Server session: feed the engine (line-buffered,
                     // replies queued into pending_out). The engine feed
@@ -2936,6 +3214,15 @@ impl Ax25Session {
             && ctx.dest == my_callsign
             && ctx.dest_ssid == my_ssid
         {
+            if self.is_chat() {
+                // Direct-chat listener: accept the link. No banner, no prompt,
+                // no store — the tab's "Connected" line is emitted by the
+                // router once the state machine returns.
+                self.send_ua(deferred, my_callsign, my_ssid);
+                self.state = Ax25ConnState::Connected;
+                self.last_rx_time = Some(Instant::now());
+                return;
+            }
             let Some((store, cfg)) = bbs_ctx else {
                 return;
             };
@@ -3070,20 +3357,17 @@ async fn run_state_machine(
             server_sessions,
             bbs_store,
             bbs_cfg,
-            bbs_callsign,
-            bbs_ssid,
             ..
         } = &mut *c;
         let Some(session) = server_sessions.get_mut(i).and_then(|o| o.as_mut()) else {
             return;
         };
-        // Server frames are addressed to the BOARD callsign (that's why the
-        // gate routed them here) — every handler gates on
-        // `ctx.dest == board_callsign && ctx.dest_ssid == board_ssid`, so the
-        // board identity must be passed, not the station's. (Default config:
-        // board = station-1, e.g. KK6SEN-1 vs station KK6SEN-0.)
-        let board_callsign = bbs_callsign.clone();
-        let board_ssid = *bbs_ssid;
+        // Every handler gates on `ctx.dest == callsign && ctx.dest_ssid ==
+        // ssid`, so a server session must dispatch as the address the peer
+        // dialed — the board callsign for the board, the operator's own
+        // callsign for a direct-chat listener. (Default config: board =
+        // station-1, e.g. KK6SEN-1 vs station KK6SEN.)
+        let (local_call, local_ssid) = session.my_identity(&my_callsign, my_ssid);
         let ctx = FrameCtx {
             src,
             src_ssid,
@@ -3113,14 +3397,14 @@ async fn run_state_machine(
             &mut deferred,
             client_arc,
             app_handle,
-            &board_callsign,
-            board_ssid,
+            &local_call,
+            local_ssid,
             &active_remotes,
             &mut dm_sent,
             bbs_ctx,
         );
         deferred
-            .execute(&mut c, client_arc, app_handle, &board_callsign, board_ssid)
+            .execute(&mut c, client_arc, app_handle, &local_call, local_ssid)
             .await;
         return;
     }
@@ -3697,7 +3981,7 @@ mod tests {
     fn test_server_slot_resolution() {
         let mut pool: Vec<Option<Ax25Session>> = (0..4).map(|_| None).collect();
         // Empty pool → no slot.
-        assert_eq!(server_slot_for(&pool, "KK6SEN", 0), None);
+        assert_eq!(server_slot_for(&pool, "KK6SEN", 0, "", 0), None);
 
         // Occupied slot matches by remote + ssid.
         let mut s = Ax25Session::new(0);
@@ -3705,17 +3989,17 @@ mod tests {
         s.remote_ssid = 0;
         s.invisible = true; // router-created server sessions are invisible
         pool[2] = Some(s);
-        assert_eq!(server_slot_for(&pool, "KK6SEN", 0), Some(2));
+        assert_eq!(server_slot_for(&pool, "KK6SEN", 0, "", 0), Some(2));
         // Same callsign, different SSID → no match (separate user).
-        assert_eq!(server_slot_for(&pool, "KK6SEN", 7), None);
+        assert_eq!(server_slot_for(&pool, "KK6SEN", 7, "", 0), None);
         // Different callsign → no match.
-        assert_eq!(server_slot_for(&pool, "W6ABC", 0), None);
+        assert_eq!(server_slot_for(&pool, "W6ABC", 0, "", 0), None);
 
         // The kernel's per-state dispatch for a Server-role session in the
         // pool: a SABM addressed to the board still resolves through the
         // same slot the router would pick (regression guard for the router
         // swap — the pool is the source of truth, not the old bbs_sessions).
-        let idx = server_slot_for(&pool, "KK6SEN", 0).expect("slot found");
+        let idx = server_slot_for(&pool, "KK6SEN", 0, "", 0).expect("slot found");
         let sess = pool[idx].as_ref().expect("session present");
         assert_eq!(sess.remote, "KK6SEN");
         assert!(sess.invisible, "server sessions never paint the UI");
@@ -3845,7 +4129,7 @@ mod tests {
         // Simulate route_bbs_frame's accept: a NEW distinct user → no existing
         // slot and capacity available → occupies the first free slot.
         for (i, user) in users[..n].iter().enumerate() {
-            let existing = server_slot_for(&pool, user, i as u8);
+            let existing = server_slot_for(&pool, user, i as u8, "", 0);
             assert!(existing.is_none(), "{user} is new — no prior slot");
             let busy = pool.iter().flatten().count() >= n;
             assert!(!busy, "capacity available before user {i}");
@@ -3859,7 +4143,7 @@ mod tests {
 
         // 5th distinct user: no existing slot AND pool is full → must be
         // refused (the router sends DM; here we assert the refusal decision).
-        let fifth = server_slot_for(&pool, users[4], 0);
+        let fifth = server_slot_for(&pool, users[4], 0, "", 0);
         assert!(fifth.is_none(), "5th user has no slot");
         let busy = pool.iter().flatten().count() >= n;
         assert!(busy, "pool is full — 5th connect is refused");
@@ -3868,7 +4152,7 @@ mod tests {
         let mut slots: Vec<usize> = users[..n]
             .iter()
             .enumerate()
-            .map(|(i, user)| server_slot_for(&pool, user, i as u8).unwrap())
+            .map(|(i, user)| server_slot_for(&pool, user, i as u8, "", 0).unwrap())
             .collect();
         slots.sort_unstable();
         slots.dedup();
@@ -3953,5 +4237,97 @@ mod tests {
         assert_ne!(s.role, SessionRole::Server);
         assert_eq!(s.role, SessionRole::Client);
         assert_eq!(s.state, Ax25ConnState::Disconnected);
+    }
+
+    // ── Direct chat (operator-callsign listener) ─────────────
+
+    /// :BELL / :RING are case-insensitive and whitespace-tolerant; anything
+    /// else must not ring (a chat message that merely mentions "bell" is not
+    /// a command).
+    #[test]
+    fn bell_command_is_case_insensitive_and_exact() {
+        for ok in [":BELL", ":bell", ":Bell", " :ring ", ":RING", ":Ring\r"] {
+            assert!(is_bell_command(ok), "{ok:?} should ring");
+        }
+        for no in ["bell", ":BELLS", "ring", ":BELL please", "", ":D"] {
+            assert!(!is_bell_command(no), "{no:?} should not ring");
+        }
+    }
+
+    /// The pool key is the whole LINK, not just the source: one station can be
+    /// connected to the board and to the operator callsign at the same time.
+    #[test]
+    fn server_slot_for_keys_on_both_ends_of_the_link() {
+        let mut board = Ax25Session::new(0);
+        board.role = SessionRole::Server;
+        board.kind = ServerKind::Board;
+        board.remote = "W6ABC".to_string();
+        board.remote_ssid = 0;
+        board.local_call = "KK6SEN".to_string();
+        board.local_ssid = 1;
+
+        let mut chat = Ax25Session::new(2);
+        chat.role = SessionRole::Server;
+        chat.kind = ServerKind::Chat;
+        chat.invisible = false;
+        chat.remote = "W6ABC".to_string();
+        chat.remote_ssid = 0;
+        chat.local_call = "KK6SEN".to_string();
+        chat.local_ssid = 15;
+
+        let pool = vec![Some(board), None, Some(chat), None];
+        assert_eq!(server_slot_for(&pool, "W6ABC", 0, "KK6SEN", 1), Some(0));
+        assert_eq!(server_slot_for(&pool, "W6ABC", 0, "KK6SEN", 15), Some(2));
+        assert_eq!(server_slot_for(&pool, "W6ABC", 7, "KK6SEN", 1), None);
+    }
+
+    /// Tab allocation: first idle C-tab, skipping tabs a chat listener already
+    /// owns, and never a tab with a live session.
+    #[test]
+    fn free_chat_tab_skips_live_and_bound_tabs() {
+        let client = |state: Ax25ConnState| {
+            let mut s = Ax25Session::new(0);
+            s.state = state;
+            s
+        };
+        let mut chat = Ax25Session::new(0);
+        chat.role = SessionRole::Server;
+        chat.kind = ServerKind::Chat;
+        chat.invisible = false;
+        chat.remote = "W6ABC".to_string();
+        chat.local_call = "KK6SEN".to_string();
+
+        let sessions = vec![
+            client(Ax25ConnState::Connected),    // C1 busy with an outgoing QSO
+            client(Ax25ConnState::Disconnected), // C2 free
+            client(Ax25ConnState::Connected),    // C3 busy
+            client(Ax25ConnState::Disconnected), // C4 free
+        ];
+        assert_eq!(
+            pick_free_chat_tab(&sessions, &[Some(chat.clone()), None]),
+            Some(1),
+            "first idle tab"
+        );
+
+        // A second listener already owns C2 → C4 is next.
+        let mut second = Ax25Session::new(1);
+        second.role = SessionRole::Server;
+        second.kind = ServerKind::Chat;
+        second.invisible = false;
+        second.remote = "W7XYZ".to_string();
+        second.local_call = "KK6SEN".to_string();
+        assert_eq!(
+            pick_free_chat_tab(&sessions, &[Some(chat), Some(second)]),
+            Some(3)
+        );
+
+        // Every tab busy → no capacity (caller refuses with DM / busy text).
+        let all_busy = vec![
+            client(Ax25ConnState::Connected),
+            client(Ax25ConnState::Connected),
+            client(Ax25ConnState::Connected),
+            client(Ax25ConnState::Connected),
+        ];
+        assert_eq!(pick_free_chat_tab(&all_busy, &[None, None, None, None]), None);
     }
 }

@@ -50,6 +50,15 @@ pub fn bbs_gate(out: &dyn KernelOutput) -> BbsGate {
     }
 }
 
+/// Live-read the operator's own identity (the direct-chat listener target)
+/// from settings. `None` = no callsign configured, so nothing is listening.
+pub fn chat_gate(out: &dyn KernelOutput) -> Option<(String, u8)> {
+    match out.load_settings() {
+        Ok(Some(s)) => crate::settings::operator_identity(&s),
+        _ => None,
+    }
+}
+
 /// A no-op output for contexts that have no UI (headless tests, invisible
 /// sessions). Test-only.
 #[cfg(test)]
