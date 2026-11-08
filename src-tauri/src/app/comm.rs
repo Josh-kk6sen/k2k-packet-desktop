@@ -9,11 +9,79 @@ use crate::agw;
 use crate::kernel::{ax25, output::KernelOutput, session};
 use tokio::net::TcpStream;
 
+/// Turn a TCP connect failure into a sentence a non-networking user can act on.
+///
+/// Always names the address and the protocol that was attempted, keeps the OS
+/// detail at the end (support/debug), and never shows a bare "os error N" as the
+/// whole message. Classification prefers `io::ErrorKind`; Windows WSA codes are
+/// mapped explicitly because several of them arrive as `Other`.
+pub fn tnc_connect_message(
+    addr: &str,
+    protocol: &str,
+    kind: std::io::ErrorKind,
+    code: Option<i32>,
+    detail: &str,
+) -> String {
+    use std::io::ErrorKind;
+    let tail = match code {
+        Some(c) => format!("os error {c}"),
+        None => detail.to_string(),
+    };
+    let lower = detail.to_lowercase();
+    let looks_like_lookup =
+        lower.contains("lookup") || lower.contains("name or service") || lower.contains("resolve");
+
+    let msg = match kind {
+        ErrorKind::ConnectionRefused => format!(
+            "TNC not responding — nothing is listening at {addr} ({protocol}). Check the port (KISS 8001, AGWPE 8000) and that the TNC software is running."
+        ),
+        ErrorKind::TimedOut => format!(
+            "No answer from {addr} ({protocol}) — the TNC may be off, on a different IP, or blocked by a firewall."
+        ),
+        ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable => format!(
+            "This computer can't reach {addr} ({protocol}) — check the network connection and that the IP address is right."
+        ),
+        ErrorKind::PermissionDenied => format!(
+            "The system blocked the connection to {addr} ({protocol}) — a firewall or security program is stopping it."
+        ),
+        ErrorKind::AddrNotAvailable => format!(
+            "The address {addr} isn't available on this computer ({protocol}) — check the TNC's IP."
+        ),
+        ErrorKind::InvalidInput => format!(
+            "{addr} isn't a usable address for {protocol} — check the Host and Port fields."
+        ),
+        _ if looks_like_lookup => format!(
+            "“{addr}” isn't an address this computer can look up — enter the TNC's IP directly, e.g. 192.168.1.20."
+        ),
+        // Windows WSA codes that land in Other.
+        _ => match code {
+            Some(10061) => format!(
+                "TNC not responding — nothing is listening at {addr} ({protocol}). Check the port (KISS 8001, AGWPE 8000) and that the TNC software is running."
+            ),
+            Some(10060) => format!(
+                "No answer from {addr} ({protocol}) — the TNC may be off, on a different IP, or blocked by a firewall."
+            ),
+            Some(10065) | Some(10051) => format!(
+                "This computer can't reach {addr} ({protocol}) — check the network connection and that the IP address is right."
+            ),
+            Some(10013) => format!(
+                "The system blocked the connection to {addr} ({protocol}) — a firewall or security program is stopping it."
+            ),
+            Some(11001) => format!(
+                "“{addr}” isn't an address this computer can look up — enter the TNC's IP directly, e.g. 192.168.1.20."
+            ),
+            _ => format!("Could not connect to the TNC at {addr} ({protocol})."),
+        },
+    };
+    format!("{msg} ({tail})")
+}
+
 /// Open a TCP transport to a TNC and configure TCP keepalive, returning the
 /// split reader/writer halves. Shared by the kiss_connect / agw_connect
 /// commands (which then load their own timing and build the client).
 pub async fn open_tcp_io(
     addr: &str,
+    protocol: &str,
 ) -> Result<
     (
         tokio::net::tcp::OwnedReadHalf,
@@ -21,9 +89,9 @@ pub async fn open_tcp_io(
     ),
     String,
 > {
-    let stream = TcpStream::connect(addr)
-        .await
-        .map_err(|e| format!("Connection failed: {}", e))?;
+    let stream = TcpStream::connect(addr).await.map_err(|e| {
+        tnc_connect_message(addr, protocol, e.kind(), e.raw_os_error(), &e.to_string())
+    })?;
     // Configure TCP keepalive so dead links are detected in ~25 seconds
     // instead of the OS default of 2 hours.
     session::configure_keepalive(&stream);
@@ -43,7 +111,7 @@ pub async fn open_tcp_stream(
     ),
     String,
 > {
-    let (reader, writer) = open_tcp_io(addr).await?;
+    let (reader, writer) = open_tcp_io(addr, "KISS").await?;
     // Load timing + TNC parameter settings from disk
     let timing = session::KissTiming::from_settings_or_default(out);
     Ok((reader, writer, timing))
@@ -482,5 +550,64 @@ mod tests {
                    "radio: KK6SEN-0 to COOL ctl UI pid=F0(Text) len 4");
         assert_eq!(agw_radio_header("KK6SEN-0", "COOL", "via KBANN", "I", "F0", 3),
                    "radio: KK6SEN-0 to COOL via KBANN ctl I pid=F0 len 3");
+    }
+}
+#[cfg(test)]
+mod tnc_error_message_tests {
+    use super::tnc_connect_message;
+    use std::io::ErrorKind;
+
+    /// Every failure must name the address AND the protocol the user selected —
+    /// the old text was "Connection failed: Connection refused (os error 111)"
+    /// with no idea what it tried to reach.
+    #[test]
+    fn refused_message_names_address_protocol_and_port_hint() {
+        let m = tnc_connect_message(
+            "192.168.1.20:8001",
+            "KISS",
+            ErrorKind::ConnectionRefused,
+            Some(111),
+            "Connection refused (os error 111)",
+        );
+        assert!(m.contains("192.168.1.20:8001"), "{m}");
+        assert!(m.contains("KISS"), "{m}");
+        assert!(m.contains("8001") && m.contains("8000"), "port hint: {m}");
+        assert!(m.ends_with("(os error 111)"), "detail kept for support: {m}");
+        assert!(!m.starts_with("Connection failed"), "{m}");
+    }
+
+    #[test]
+    fn timeout_message_suggests_causes() {
+        let m = tnc_connect_message("10.0.0.5:8000", "AGWPE", ErrorKind::TimedOut, Some(110), "");
+        assert!(m.starts_with("No answer from 10.0.0.5:8000 (AGWPE)"), "{m}");
+        assert!(m.contains("firewall"), "{m}");
+    }
+
+    #[test]
+    fn windows_codes_are_mapped_even_when_kind_is_other() {
+        let m = tnc_connect_message("192.168.1.20:8001", "KISS", ErrorKind::Other, Some(10061), "");
+        assert!(m.contains("nothing is listening"), "{m}");
+        let t = tnc_connect_message("192.168.1.20:8001", "KISS", ErrorKind::Other, Some(10060), "");
+        assert!(t.starts_with("No answer from"), "{t}");
+    }
+
+    #[test]
+    fn unresolvable_host_is_explained_without_os_jargon_only() {
+        let m = tnc_connect_message(
+            "tnc.local:8001",
+            "KISS",
+            ErrorKind::Other,
+            None,
+            "failed to lookup address information: Name or service not known",
+        );
+        assert!(m.contains("isn't an address this computer can look up"), "{m}");
+        assert!(m.contains("192.168.1.20"), "gives an example IP: {m}");
+    }
+
+    #[test]
+    fn unknown_failure_still_contextualised() {
+        let m = tnc_connect_message("1.2.3.4:9999", "AGWPE", ErrorKind::Other, Some(4242), "weird");
+        assert!(m.contains("Could not connect to the TNC at 1.2.3.4:9999 (AGWPE)"), "{m}");
+        assert!(m.contains("os error 4242"), "{m}");
     }
 }

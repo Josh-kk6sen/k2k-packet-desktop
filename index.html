@@ -621,6 +621,9 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #help-dialog{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:540px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
 #help-dialog h2{padding:16px 20px 12px;font-size:inherit;font-weight:600;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 #help-dialog h2 .close-s{border:none;color:var(--text2);font-size:20px;cursor:pointer;padding:0 4px;background:none}
+/* Version lives here now (moved out of the top bar). Muted, monospace, reads as
+   metadata next to the title rather than as part of it. */
+#help-version{color:var(--muted);font-weight:400;font-family:var(--mono);letter-spacing:0;margin-left:8px;white-space:nowrap}
 .h-body{padding:12px 20px 16px;color:var(--text);font-size:inherit;line-height:1.5}
 .h-body h3{font-size:inherit;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;font-weight:700}
 .h-body h3:first-child{margin-top:0}
@@ -749,9 +752,7 @@ if(!window.__TAURI_INTERNALS__){
       <button class="settings-btn" id="help-btn" title="How to use">&#63;</button>
       <button class="settings-btn" id="log-btn" title="Open log folder" onclick="openLogDir()">&#128194;</button>
       <button class="settings-btn" id="settings-btn">&#9881;</button>
-      <span id="app-version" style="color:var(--muted);margin-left:6px;white-space:nowrap">v0.11.32</span>
     </div>
-    <script>{!function(){try{if(window.__TAURI__)__TAURI__.app.getVersion().then(function(v){var e=document.getElementById('app-version');if(e)e.textContent='v'+v})}catch(e){}}()}</script>
   </div>
 
   <!-- MAIN SPLIT -->
@@ -1016,7 +1017,7 @@ if(!window.__TAURI_INTERNALS__){
 <!-- HELP MODAL -->
 <div id="help-overlay" class="overlay">
   <div id="help-dialog">
-    <h2>K2K Packet Desktop — Quick Start <button class="close-s" id="close-help">&#10005;</button></h2>
+    <h2><span>K2K Packet Desktop — Quick Start <span id="help-version"></span></span> <button class="close-s" id="close-help">&#10005;</button></h2>
     <div class="h-body">
 
 <h3>Connect</h3>
@@ -1032,6 +1033,7 @@ if(!window.__TAURI_INTERNALS__){
 <p>Type <code>:d</code> and press <span class="key">Enter</span> to disconnect the current tab's session.</p>
 
 <p>Once connected, type a message and press <span class="key">Enter</span> to send it. Use <span class="key">Shift+Enter</span> for multi-line messages. <span class="key">&#8593;</span> / <span class="key">&#8595;</span> walk your send history — <strong>Up starts at the most recently sent line</strong> and goes back from there.</p>
+<p><strong>Enter on an empty line sends a bare CR.</strong> It appears in the transcript as <code>[CR]</code>. Kantronics KNet nodes only print their prompt after a CR, and a KPC3 node aborts a connect it has started when it receives one — so this is how you get a prompt from a silent node, or cancel a call in progress.</p>
 
 <h3>Unproto Mode (UI Frames)</h3>
 <p>The right panel displays all received and sent unproto (UI) frames. You can transmit unproto frames using the input fields at the bottom:</p>
@@ -1084,8 +1086,6 @@ if(!window.__TAURI_INTERNALS__){
     </div>
   </div>
 </div>
-
-
 </body>
 
 

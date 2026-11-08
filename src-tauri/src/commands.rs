@@ -1049,7 +1049,7 @@ pub async fn agw_connect(
     // auto-connect fires and the user also clicks Connect manually.
     remove_connections_to(&state, &host, port).await;
 
-    let (reader, writer) = crate::app::comm::open_tcp_io(&addr).await?;
+    let (reader, writer) = crate::app::comm::open_tcp_io(&addr, "AGWPE").await?;
     let my_call = if callsign.is_empty() {
         "N0CALL".to_string()
     } else {

@@ -173,12 +173,18 @@ pub fn run() {
             // AppData\Local\<id> folder for EBWebView next to the install
             // dir — the whole app must live in one folder.
             let handle = app.handle();
+            // Window title carries the version, read from the bundle itself so
+            // it can never drift from the build (no hand-maintained string).
+            let win_title = format!(
+                "K2K Packet Desktop  v{}",
+                handle.package_info().version
+            );
             let wb = tauri::WebviewWindowBuilder::new(
                 handle,
                 "main",
                 tauri::WebviewUrl::App("index.html".into()),
             )
-            .title("K2K Packet Desktop")
+            .title(&win_title)
             .inner_size(920.0, 680.0)
             .min_inner_size(640.0, 480.0)
             .resizable(true)
