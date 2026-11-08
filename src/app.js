@@ -219,7 +219,7 @@ async function disconnectTnc() {
   } catch (e) {}
   conn.cx = false;
   conn = null;
-  clearTimeout(silenceTimer);
+  clearTimeout(agwRegTimer);
   setConnStatus("idle", "Disconnected");
   sendBtn.disabled = true;
   unprotoSend.disabled = true;
@@ -267,7 +267,7 @@ async function connectTnc() {
     portEl.disabled = true;
     composeIn.focus();
     tabMsg(activeTab, "sys", "TNC connected to " + hostv + ":" + portv);
-    armSilenceWatch(hostv, portv);
+    armAgwRegisterWatch(hostv, portv, callsign);
     settings.host = hostv;
     settings.port = portv;
     settings.callsign = callsign;
@@ -300,30 +300,35 @@ async function connectTnc() {
   }
 }
 
-// ── "Connected but silent" watchdog ──
-// A wrong service on an open port (e.g. AGWPE pointed at the KISS port) gives a
-// successful TCP connect and then nothing at all — previously that looked like
-// a working connection with a dead receiver. If no frame arrives within 10s of
-// connecting, say so.
-let rxFrames = 0;
-let silenceTimer = null;
+// ── AGWPE registration watchdog ──
+// KISS is silent by design when the channel is idle, so "no frames for N
+// seconds" proves nothing there (that produced false alarms on a perfectly
+// working link). Only AGWPE has a handshake we can actually judge: the TNC
+// must answer our Register ('X') with RSP_REGISTER_RESULT, which the backend
+// reports as a system-message. If that never arrives, the port is probably
+// not an AGWPE port.
+let agwRegTimer = null;
 
-function armSilenceWatch(host, port) {
-  clearTimeout(silenceTimer);
-  const mark = rxFrames;
-  silenceTimer = setTimeout(() => {
-    if (!(conn && conn.cx) || rxFrames !== mark) return;
-    const proto = isAgw() ? "AGWPE" : "KISS";
+function armAgwRegisterWatch(host, port, call) {
+  clearTimeout(agwRegTimer);
+  if (!isAgw()) return;
+  agwRegTimer = setTimeout(() => {
+    if (!(conn && conn.cx) || !isAgw()) return;
     tabMsg(
       activeTab,
       "sys",
-      `Connected to ${host}:${port} (${proto}), but the TNC has sent nothing in 10 s. With Protocol set to AGWPE the TNC must serve 8000; KISS uses 8001.`
+      `Connected to ${host}:${port} (AGWPE), but the TNC never confirmed registering ${call}. If that port is a KISS port, set Protocol to KISS (8001).`
     );
-  }, 10000);
+  }, 6000);
 }
 
-// In-flight connect guard: prevents a double-click (or re-click during the
-// async connect) from spawning a second backend session / orphaning the first.
+listen("system-message", (ev) => {
+  const text = String((ev.payload && ev.payload.text) || "");
+  if (/AGW registered/i.test(text)) clearTimeout(agwRegTimer);
+});
+
+// Single-flight guard: a second Connect click must not spawn another backend
+// session while the first is still opening.
 let connecting = false;
 
 connectBtn.onclick = async () => {
@@ -1137,7 +1142,6 @@ listen("session-disconnected", (ev) => {
 });
 
 listen("session-iframe", (ev) => {
-  rxFrames++;
   const { tab, text } = ev.payload;
   if (tab >= TAB_COUNT) return;
   const norm = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -1186,7 +1190,6 @@ listen("session-connecting", (ev) => {
 });
 
 listen("unproto-frame", (ev) => {
-  rxFrames++;
   const { source, dest, info, frame_type, radio_header, raw_kiss_data, sent } = ev.payload;
   ingestUnproto(source, dest, info, timeStr(), frame_type || "UI-", radio_header || "", raw_kiss_data || "", !!sent);
 });
