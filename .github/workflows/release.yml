@@ -63,6 +63,74 @@ jobs:
           prerelease: false
           args: --bundles deb
 
+  # Native arm64 build on GitHub's ARM64 runner (ubuntu-24.04-arm, free for
+  # public repos). This replaces the ~1h50m qemu cross-build on .249.
+  # armhf (32-bit) is NOT built here: GitHub has no 32-bit ARM hosted runner,
+  # so Raspberry Pi OS 32-bit / DigiPi packages stay a local qemu build.
+  build-linux-arm64:
+    name: Build Linux arm64 .deb
+    runs-on: ubuntu-24.04-arm
+    if: github.event_name != 'workflow_dispatch' || contains(github.event.inputs.bundles, 'arm64') || contains(github.event.inputs.bundles, 'all')
+    steps:
+      - uses: actions/checkout@v5
+
+      # A mislabelled runner would silently produce an x86_64 package.
+      - name: Confirm ARM64 host
+        run: |
+          uname -m
+          dpkg --print-architecture
+          test "$(dpkg --print-architecture)" = "arm64"
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rust toolchain
+        run: rustup update stable && rustup default stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl wget file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            pkg-config
+
+      - name: Build + package
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "K2K Packet Desktop ${{ github.ref_name }}"
+          releaseBody: ""
+          releaseDraft: false
+          prerelease: false
+          args: --bundles deb
+
+      # Guard against the armel/armhf class of packaging bug: assert the control
+      # field matches the architecture we actually built for.
+      - name: Verify package architecture
+        run: |
+          deb=$(ls src-tauri/target/release/bundle/deb/*.deb | head -1)
+          dpkg-deb -f "$deb" Package Version Architecture Depends
+          test "$(dpkg-deb -f "$deb" Architecture)" = "arm64"
+
   build-windows:
     name: Build Windows .exe
     runs-on: windows-latest
