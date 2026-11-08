@@ -644,8 +644,13 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 // ── BROWSER PREVIEW SHIM (dev only — inert inside Tauri) ──────────
 // Lets the frontend run in a plain browser (dev server / preview page)
 // without the Tauri runtime: settings read/write go to localStorage.
-// Inside Tauri, window.__TAURI_INTERNALS__ already exists → skipped.
-if(!window.__TAURI_INTERNALS__){
+//
+// OPT-IN ONLY (`?preview` in the URL): the app also ships a real browser mode
+// (`k2k-packet-desktop --web`), and this fake backend must never hijack it —
+// a page served by that server has no __TAURI_INTERNALS__ either, so the old
+// "no internals ⇒ preview" test silently replaced the real one.
+if(!window.__TAURI_INTERNALS__ && /[?&]preview\b/.test(location.search)){
+  window.__K2K_PREVIEW__ = true;
   var _ls=window.localStorage,_key="k2k-preview-settings";
   function _previewSettings(){
     try{var v=JSON.parse(_ls.getItem(_key));if(v&&typeof v==="object")return v}catch(e){}

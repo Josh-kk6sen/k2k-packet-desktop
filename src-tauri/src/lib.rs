@@ -20,6 +20,7 @@ mod live_test;
 mod link;
 mod settings;
 mod storage;
+mod web;
 
 // Kernel modules re-exported at crate root path so existing `crate::session::…`
 // etc. references keep resolving (module re-export preserves pub(crate)
@@ -56,6 +57,56 @@ pub fn append_log(kind: &str, text: &str) {
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
         let _ = writeln!(f, "{}", text);
     }
+}
+
+/// Headless browser mode (`--web`): the same backend, no window at all.
+///
+/// Nothing Tauri-specific is constructed here — no `tauri::Builder`, no
+/// WebView, no GTK — so this runs on a box with no display. It shares the
+/// data dir / settings / logs with the desktop app, so both front-ends see
+/// one configuration.
+pub struct WebOptions {
+    pub port: u16,
+    pub bind: String,
+}
+
+pub fn run_web(opts: WebOptions) -> Result<(), String> {
+    let data_base = crate::storage::init_headless_data_dir();
+    let log_dir = data_base.join("logs");
+    std::fs::create_dir_all(&log_dir).map_err(|e| {
+        format!(
+            "Cannot create log folder {}: {e}",
+            log_dir.display()
+        )
+    })?;
+    let _ = LOG_DIR.set(log_dir.clone());
+    append_log(
+        "raw",
+        &format!(
+            "=== K2K Packet Desktop v{} started (headless web mode) ===",
+            env!("CARGO_PKG_VERSION")
+        ),
+    );
+
+    let addr = format!("{}:{}", opts.bind, opts.port);
+    // A browser client has no console on Windows (the exe is built as a
+    // windowless app), so the URL is always also written next to settings.
+    let url_file = data_base.join("web-client.txt");
+    let url_line = format!("http://{addr}/");
+    let _ = std::fs::write(&url_file, format!("{url_line}\n"));
+    append_log("raw", &format!("web client: {url_line}"));
+
+    println!("K2K Packet Desktop — web client");
+    println!("  {url_line}");
+    println!("  serving {} (Ctrl-C to stop)", data_base.display());
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| format!("Cannot start async runtime: {e}"))?;
+    let state = std::sync::Arc::new(session::AppState::new());
+    let sink = web::Sink::new();
+    rt.block_on(async move { web::serve(state, sink, addr).await })
 }
 
 /// Build and run the Tauri application.
@@ -123,6 +174,9 @@ pub fn run() {
             // picked during installation. On Linux/macOS it's the standard
             // local data dir (the install dir is not user-writable there).
             let data_base = crate::storage::data_base(app.handle());
+            // Pin it for every layer, so the settings/history/log helpers work
+            // identically here and in headless (`--web`) mode.
+            crate::storage::set_data_dir(data_base.clone());
             // One-time migration from earlier layouts: ≤0.9.45 used
             // app_data_dir (Roaming on Windows); 0.9.46 used
             // app_local_data_dir. Copy any existing files across so nothing
@@ -213,7 +267,6 @@ pub fn run() {
                         return;
                     }
                     let maximized = window.is_maximized().unwrap_or(false);
-                    let handle = window.app_handle();
                     let Some(size) = window.outer_size().ok() else { return; };
                     // Never persist a degenerate size (a minimized/hidden
                     // window can report 0x0). Saving that is what hides the
@@ -223,7 +276,6 @@ pub fn run() {
                     }
                     let Some(pos) = window.outer_position().ok() else { return; };
                     let _ = settings::save_window_state_sync(
-                        &handle,
                         size.width,
                         size.height,
                         pos.x,

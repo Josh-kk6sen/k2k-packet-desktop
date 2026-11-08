@@ -14,6 +14,8 @@
 // CSS NOTE: the LIVE stylesheet is the inline <style> block inside index.html
 // — it is the only stylesheet; there is no separate src/styles file.
 
+// Transport first: it installs the browser IPC shim the legacy modules use.
+import "./transport";
 import "./logging";
 import "./pbbs";
 import "./protocol";

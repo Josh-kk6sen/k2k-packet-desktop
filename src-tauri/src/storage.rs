@@ -3,26 +3,79 @@
 //! The settings and history layers both write JSON files into the app
 //! data directory — this keeps the path-building and the
 //! create-dir → serialize → write sequence in one place.
+//!
+//! The base directory is resolved ONCE at startup (desktop setup or the
+//! headless `--web` entry point) and stored in `DATA_DIR`, so every layer —
+//! including code that has no `AppHandle` (headless serve mode) — agrees on
+//! where settings.json / history.json / pbbs_data.json / logs live.
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use tauri::AppHandle;
 use tauri::Manager;
 
-/// Absolute path of `file` inside the app data directory.
-///
-/// Everything (settings.json, history.json, pbbs_data.json, logs/) shares
-/// one base. On Windows the base is the executable's folder — the exact
-/// directory the user chose at install time — so the whole app lives in
-/// one place (portable-style). On Linux/macOS the install dir is not
-/// user-writable, so the standard local data dir is used instead.
-pub fn app_data_path(app: &AppHandle, file: &str) -> PathBuf {
-    let mut path = data_base(app);
-    path.push(file);
-    path
+/// The one data directory for this process. Set at startup; see `set_data_dir`.
+static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Pin the data directory for this process. First call wins; later calls are
+/// ignored (the desktop setup runs once, before any command can execute).
+pub fn set_data_dir(dir: PathBuf) {
+    let _ = DATA_DIR.set(dir);
+}
+
+/// Resolve and pin the data dir for a process with no Tauri app (headless).
+/// Same layout rules as the desktop app so both modes share settings/logs.
+pub fn init_headless_data_dir() -> PathBuf {
+    let dir = default_data_base();
+    set_data_dir(dir.clone());
+    dir
+}
+
+/// The base directory, resolved without Tauri: Windows keeps everything in
+/// the executable's folder (portable-style, the directory chosen at install
+/// time); Linux/macOS use the standard local data dir for the app id.
+fn default_data_base() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                return dir.to_path_buf();
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(dir) = std::env::var("XDG_DATA_HOME") {
+            if !dir.is_empty() {
+                return PathBuf::from(dir).join("K2KDesktop");
+            }
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.is_empty() {
+                return PathBuf::from(home).join(".local/share/K2KDesktop");
+            }
+        }
+    }
+    PathBuf::from(".")
+}
+
+/// The single base directory for all app data. Always the pinned directory
+/// once `set_data_dir` has run; otherwise a best-effort default.
+pub fn data_base_static() -> PathBuf {
+    DATA_DIR.get().cloned().unwrap_or_else(default_data_base)
+}
+
+/// Absolute path of `file` inside the app data directory, without needing an
+/// `AppHandle` (headless/browser mode).
+pub fn app_data_path_static(file: &str) -> PathBuf {
+    data_base_static().join(file)
 }
 
 /// The single base directory for all app data (see `app_data_path`).
 pub fn data_base(app: &AppHandle) -> PathBuf {
+    if DATA_DIR.get().is_some() {
+        return data_base_static();
+    }
     #[cfg(target_os = "windows")]
     {
         // Portable-style: keep all app data in the executable's folder —

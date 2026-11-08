@@ -14,8 +14,7 @@
 // bundle is ever reintroduced it must NOT co-load with this module, or
 // frames will render twice.
 
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke, listen, isWeb } from "./transport.js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { playSound, initSound } from "./sound.js";
 
@@ -1246,6 +1245,8 @@ listen("session-ack", (ev) => {
 // ── Window state persistence ──
 let winStateTimer = null;
 async function saveWindowStateDebounced() {
+  // Browser mode: there is no window on the server to remember.
+  if (isWeb) return;
   if (winStateTimer) clearTimeout(winStateTimer);
   winStateTimer = setTimeout(async () => {
     try {
@@ -1263,9 +1264,11 @@ async function saveWindowStateDebounced() {
     } catch (e) {}
   }, 1000);
 }
-const currentWindow = getCurrentWindow();
-currentWindow.onResized(() => saveWindowStateDebounced());
-currentWindow.onMoved(() => saveWindowStateDebounced());
+if (!isWeb) {
+  const currentWindow = getCurrentWindow();
+  currentWindow.onResized(() => saveWindowStateDebounced());
+  currentWindow.onMoved(() => saveWindowStateDebounced());
+}
 
 // ── Misc UI wiring ──
 fullscreenBtn.onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
