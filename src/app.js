@@ -219,6 +219,7 @@ async function disconnectTnc() {
   } catch (e) {}
   conn.cx = false;
   conn = null;
+  clearTimeout(silenceTimer);
   setConnStatus("idle", "Disconnected");
   sendBtn.disabled = true;
   unprotoSend.disabled = true;
@@ -266,6 +267,7 @@ async function connectTnc() {
     portEl.disabled = true;
     composeIn.focus();
     tabMsg(activeTab, "sys", "TNC connected to " + hostv + ":" + portv);
+    armSilenceWatch(hostv, portv);
     settings.host = hostv;
     settings.port = portv;
     settings.callsign = callsign;
@@ -281,10 +283,43 @@ async function connectTnc() {
       }
     } catch (e) {}
   } catch (err) {
-    setConnStatus("idle", " Disconnected");
+    setConnStatus("idle", "Disconnected");
     setConnectBtn("Connect");
-    tabMsg(activeTab, "sys", "Failed: " + err);
+    // The backend returns a complete sentence naming the address, port and
+    // protocol that failed. Show it as-is — no second "Failed:" prefix, no raw
+    // "Connection failed: ..." wrapper — and pin it to the button so hovering
+    // retells it after the tab scrolls on.
+    const msg = String(err && err.message ? err.message : err).replace(/^Error:\s*/, "");
+    tabMsg(activeTab, "sys", msg);
+    connectBtn.title = msg;
+    connectBtn.style.borderColor = "var(--red)";
+    setTimeout(() => {
+      connectBtn.style.borderColor = "";
+      connectBtn.title = "Connect to the TNC";
+    }, 5000);
   }
+}
+
+// ── "Connected but silent" watchdog ──
+// A wrong service on an open port (e.g. AGWPE pointed at the KISS port) gives a
+// successful TCP connect and then nothing at all — previously that looked like
+// a working connection with a dead receiver. If no frame arrives within 10s of
+// connecting, say so.
+let rxFrames = 0;
+let silenceTimer = null;
+
+function armSilenceWatch(host, port) {
+  clearTimeout(silenceTimer);
+  const mark = rxFrames;
+  silenceTimer = setTimeout(() => {
+    if (!(conn && conn.cx) || rxFrames !== mark) return;
+    const proto = isAgw() ? "AGWPE" : "KISS";
+    tabMsg(
+      activeTab,
+      "sys",
+      `Connected to ${host}:${port} (${proto}), but the TNC has sent nothing in 10 s. With Protocol set to AGWPE the TNC must serve 8000; KISS uses 8001.`
+    );
+  }, 10000);
 }
 
 // In-flight connect guard: prevents a double-click (or re-click during the
@@ -313,7 +348,27 @@ composeIn.onkeydown = (e) => {
 async function handleCommand() {
   const text = composeIn.value.trim();
   const via = viaInput.value.trim();
-  if (!text) return;
+
+  // Empty line = one bare CR (0x0D). On a live connected tab that is a real
+  // command, not a no-op: Kantronics KNet nodes only print their prompt after
+  // a CR, and a KPC3 node aborts a pending connect when it sees one. The
+  // backend's normalize_linpac_text() turns "" into exactly one 0x0D byte, and
+  // session-sent renders it as [CR].
+  if (!text) {
+    if (conn && conn.cx && tabs[activeTab].state === "connected") {
+      try {
+        await invoke(connCmd("ax25_send_iframe", "agw_send_data"), {
+          connId: conn.id,
+          tab: activeTab,
+          text: "\r",
+        });
+      } catch (err) {
+        tabMsg(activeTab, "sys", "Send failed: " + err);
+      }
+      composeIn.value = "";
+    }
+    return;
+  }
 
   // :c CALLSIGN [via ...] — open a connected-mode session
   if (text.match(/^:c /i)) {
@@ -1082,6 +1137,7 @@ listen("session-disconnected", (ev) => {
 });
 
 listen("session-iframe", (ev) => {
+  rxFrames++;
   const { tab, text } = ev.payload;
   if (tab >= TAB_COUNT) return;
   const norm = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -1105,8 +1161,12 @@ listen("session-iframe", (ev) => {
 listen("session-sent", (ev) => {
   const { tab, text } = ev.payload;
   if (tab < TAB_COUNT) {
-    tabs[tab].lastSentText = text;
-    tabMsg(tab, "tx", text);
+    // A bare CR (empty line) shows as [CR] so the operator can see the byte
+    // actually went out. Its echo from the node is suppressed by storing ""
+    // as the last sent text — the node answers a CR with CR alone.
+    const bare = String(text).replace(/[\r\n]/g, "").trim() === "";
+    tabs[tab].lastSentText = bare ? "" : text;
+    tabMsg(tab, "tx", bare ? "[CR]" : text);
   }
 });
 
@@ -1126,6 +1186,7 @@ listen("session-connecting", (ev) => {
 });
 
 listen("unproto-frame", (ev) => {
+  rxFrames++;
   const { source, dest, info, frame_type, radio_header, raw_kiss_data, sent } = ev.payload;
   ingestUnproto(source, dest, info, timeStr(), frame_type || "UI-", radio_header || "", raw_kiss_data || "", !!sent);
 });
@@ -1239,8 +1300,28 @@ document.onmouseup = () => {
   }
 };
 
+// ── App version ──
+// Injected at build time by vite from package.json (`define: __APP_VERSION__`),
+// then overridden by Tauri's own bundle version, which is compiled from
+// Cargo.toml. No version literal lives in the HTML or JS.
+const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "";
+
+function stampAppVersion() {
+  const set = (v) => {
+    const el = document.getElementById("help-version");
+    if (el && v) el.textContent = "v" + v;
+  };
+  set(APP_VERSION);
+  try {
+    if (window.__TAURI__ && __TAURI__.app && __TAURI__.app.getVersion) {
+      __TAURI__.app.getVersion().then(set).catch(() => {});
+    }
+  } catch (e) {}
+}
+
 // ── Init ──
 initSound();
+stampAppVersion();
 setConnStatus("idle", "Disconnected");
 sendBtn.disabled = true;
 unprotoSend.disabled = true;
