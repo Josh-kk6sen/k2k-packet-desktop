@@ -1183,13 +1183,21 @@ async fn on_agw_connected(
     // Always on (no setting): whoever dials the callsign in the top of
     // Settings gets the next free C-tab. Checked after the board so a
     // board callsign collision resolves in the board's favour.
-    if !is_bbs_connect {
+    //
+    // But NOT when one of our own C-tabs dialled this station: Direwolf's
+    // connect report names the remote in call_from and US in call_to (both
+    // directions), so an outbound connect would otherwise look like an
+    // inbound one and be stolen by the listener.
+    let outbound_owns = {
+        let c = client.lock().await;
+        agw_outbound_owns(&c.info.sessions, &remote_call, remote_ssid)
+    };
+    if !is_bbs_connect && !outbound_owns {
         if let Some(op) = crate::kernel::output::chat_gate(app_handle) {
             if ct_base == op.0 && ct_ssid == op.1 {
                 let mut c = client.lock().await;
                 let tab = (0..c.info.sessions.len()).find(|t| {
                     c.info.sessions[*t].state == session::Ax25ConnState::Disconnected
-                        && c.info.sessions[*t].remote.is_empty()
                         && !c
                             .server_sessions
                             .iter()
@@ -1393,7 +1401,14 @@ async fn on_agw_data(
     // operator as the SOURCE and must not be re-rendered as received text.
     if let Some(op) = crate::kernel::output::chat_gate(app_handle) {
         let (ct_base, ct_ssid) = agw::parse_callsign_ssid(frame.call_to.trim());
-        if ct_base == op.0 && ct_ssid == op.1 {
+        let (cf_base, cf_ssid) = agw::parse_callsign_ssid(frame.call_from.trim());
+        // Never steal traffic that belongs to one of our own outbound links
+        // (peer sits in call_from in both directions, per Direwolf).
+        let outbound_owns = {
+            let c = client.lock().await;
+            agw_outbound_owns(&c.info.sessions, &cf_base, cf_ssid)
+        };
+        if ct_base == op.0 && ct_ssid == op.1 && !outbound_owns {
             let chat_i = {
                 let c = client.lock().await;
                 agw_chat_slot(&c, frame.call_from.trim(), frame.call_to.trim(), &op)
@@ -1872,6 +1887,27 @@ fn agw_bbs_slot(c: &session::TcpClient, call_from: &str, call_to: &str) -> Optio
             (bbs_matches(&cf, cfs) && remote_matches(&ct, cts))
                 || (bbs_matches(&ct, cts) && remote_matches(&cf, cfs))
         })
+    })
+}
+
+/// A C-tab already dialled this peer, so an AGW "connect complete" naming it is
+/// the answer to OUR SABM — not an inbound call to the operator callsign.
+///
+/// Direwolf reports a completed connect with the remote as `call_from` and us as
+/// `call_to` in both directions, so `call_to == operator callsign` is true for
+/// outgoing links too. Without this guard the chat listener claims every
+/// outbound connect, allocates a listener tab, and the dialling tab never leaves
+/// AwaitingConnect (Direwolf says connected, we say "Not connected to any
+/// station"). Same class of bug as `client_session_owns` on the KISS path.
+fn agw_outbound_owns(
+    sessions: &[session::Ax25Session],
+    base: &str,
+    ssid: u8,
+) -> bool {
+    sessions.iter().any(|s| {
+        s.state != session::Ax25ConnState::Disconnected
+            && s.remote == base
+            && s.remote_ssid == ssid
     })
 }
 
@@ -2818,6 +2854,47 @@ mod beacon_tests {
         assert_eq!(
             s.last_interval_secs, 300,
             "cadence updates for after the verification"
+        );
+    }
+}
+
+#[cfg(test)]
+mod agw_outbound_ownership_tests {
+    use super::*;
+
+    /// REGRESSION (v0.11.28/29, AGWPE only): Direwolf reports a completed
+    /// connect with the REMOTE in call_from and US in call_to — in both
+    /// directions. So an outbound link's completion looks exactly like an
+    /// inbound call to the operator callsign, and the chat listener claimed it:
+    /// a listener tab lit up, the dialling tab stayed in AwaitingConnect, and
+    /// typing produced "Not connected to any station" while Direwolf logged
+    /// "Stream N: Connected".
+    #[test]
+    fn outbound_connect_owns_its_peer_in_agw() {
+        let mut dialling = session::Ax25Session::new(0);
+        dialling.remote = "KJOHN".to_string();
+        dialling.remote_ssid = 0;
+        dialling.state = session::Ax25ConnState::AwaitingConnect;
+
+        let sessions = vec![dialling, session::Ax25Session::new(1)];
+        assert!(
+            agw_outbound_owns(&sessions, "KJOHN", 0),
+            "AwaitingConnect owns the peer — the completion is ours"
+        );
+        assert!(
+            !agw_outbound_owns(&sessions, "KK6SEN", 8),
+            "the operator's own callsign is never a dialled peer"
+        );
+        assert!(
+            !agw_outbound_owns(&sessions, "KJOHN", 7),
+            "a different SSID is a different station"
+        );
+
+        let mut torn_down = sessions.clone();
+        torn_down[0].state = session::Ax25ConnState::Disconnected;
+        assert!(
+            !agw_outbound_owns(&torn_down, "KJOHN", 0),
+            "a torn-down tab no longer owns the peer, so the listener may answer"
         );
     }
 }
