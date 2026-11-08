@@ -175,8 +175,8 @@ pub fn clamp_beacon_interval(s: &mut AppSettings) {
 /// main file. Clamps font sizes to safe ranges (8-25) and AX.25 timers to
 /// safe minimums on load to guard against malformed settings.json or manual
 /// editing mistakes.
-pub fn load_settings_from_disk(app: &AppHandle) -> Result<Option<AppSettings>, String> {
-    let path = crate::storage::app_data_path(app, "settings.json");
+pub fn load_settings_from_disk() -> Result<Option<AppSettings>, String> {
+    let path = crate::storage::app_data_path_static("settings.json");
     load_settings_from_path(&path)
 }
 
@@ -371,8 +371,8 @@ fn sanitize_message_board(s: &mut AppSettings) {
 }
 
 /// Load settings from disk, falling back to defaults on missing file or parse error.
-pub fn load_settings_or_default(app: &AppHandle) -> AppSettings {
-    load_settings_from_disk(app).ok().flatten().unwrap_or_default()
+pub fn load_settings_or_default() -> AppSettings {
+    load_settings_from_disk().ok().flatten().unwrap_or_default()
 }
 
 /// True when the beacon is enabled AND has both text and a destination set.
@@ -391,14 +391,13 @@ pub fn beacon_configured(settings: &AppSettings) -> bool {
 /// degraded to `AppSettings::default()` and the save then overwrote the
 /// real file with defaults + window state.
 pub fn save_window_state_sync(
-    app: &AppHandle,
     width: u32,
     height: u32,
     x: i32,
     y: i32,
     maximized: bool,
 ) -> Result<(), String> {
-    let mut existing = match load_settings_from_disk(app) {
+    let mut existing = match load_settings_from_disk() {
         Ok(Some(s)) => s,
         // Missing file on a fresh install, or unreadable file: do NOT
         // fabricate defaults and write them over disk. Window position is
@@ -410,11 +409,11 @@ pub fn save_window_state_sync(
     existing.window_x = Some(x);
     existing.window_y = Some(y);
     existing.window_maximized = Some(maximized);
-    save_settings_to_disk(app, &existing)
+    save_settings_to_disk(&existing)
 }
 
-fn save_settings_to_disk(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
-    let path = crate::storage::app_data_path(app, "settings.json");
+fn save_settings_to_disk(settings: &AppSettings) -> Result<(), String> {
+    let path = crate::storage::app_data_path_static("settings.json");
     save_settings_to_path(&path, settings)
 }
 
@@ -479,7 +478,7 @@ fn monitor_rects(window: &tauri::WebviewWindow) -> Vec<(i32, i32, u32, u32)> {
 
 /// Setup-time restore: read settings and apply window geometry
 pub fn restore_window_state(app: &AppHandle) -> Result<(), String> {
-    let Ok(Some(settings)) = load_settings_from_disk(app) else { return Ok(()); };
+    let Ok(Some(settings)) = load_settings_from_disk() else { return Ok(()); };
     let Some(window) = app.get_webview_window("main") else { return Ok(()); };
     // Only restore a size that could actually be a window. Anything else
     // (0x0, 3x2 …) is treated as "never saved" and the builder's default
@@ -544,15 +543,12 @@ pub fn sanitize_unproto_colors(colors: &mut Option<HashMap<String, UnprotoThemeC
 }
 
 #[tauri::command]
-pub async fn save_settings(
-    app: AppHandle,
-    mut settings: AppSettings,
-) -> Result<(), String> {
+pub async fn save_settings(mut settings: AppSettings) -> Result<(), String> {
     // The main settings dialog and the quick toggles (dedup, simple unproto,
     // last To/Via…) build their save payload without unproto_colors. Preserve
     // whatever is on disk so a normal save can't silently wipe custom colors.
     if settings.unproto_colors.is_none() {
-        if let Ok(Some(existing)) = load_settings_from_disk(&app) {
+        if let Ok(Some(existing)) = load_settings_from_disk() {
             settings.unproto_colors = existing.unproto_colors;
         }
     }
@@ -561,7 +557,7 @@ pub async fn save_settings(
     sanitize_message_board(&mut settings);
     // Daily settings-change log: which fields differ from what's on disk.
     {
-        let old = load_settings_from_disk(&app).ok().flatten();
+        let old = load_settings_from_disk().ok().flatten();
         let new_val = serde_json::to_value(&settings).unwrap_or_default();
         let changed = match &old {
             Some(o) => {
@@ -579,7 +575,7 @@ pub async fn save_settings(
             ),
         );
     }
-    save_settings_to_disk(&app, &settings)?;
+    save_settings_to_disk(&settings)?;
     // NOTE: no beacon restart here. The beacon task polls settings from disk
     // every 10s on its own; restarting it on every save was the cause of
     // beacon spam when unrelated settings (unproto To/Via auto-saves, UI
@@ -588,12 +584,12 @@ pub async fn save_settings(
 }
 
 #[tauri::command]
-pub async fn load_settings(app: AppHandle) -> Result<AppSettings, String> {
-    let settings = load_settings_or_default(&app);
+pub async fn load_settings() -> Result<AppSettings, String> {
+    let settings = load_settings_or_default();
     // Write default settings.json if it didn't exist yet (fresh install)
-    let path = crate::storage::app_data_path(&app, "settings.json");
+    let path = crate::storage::app_data_path_static("settings.json");
     if !path.exists() {
-        let _ = save_settings_to_disk(&app, &settings);
+        let _ = save_settings_to_disk(&settings);
     }
     Ok(settings)
 }
@@ -618,21 +614,20 @@ fn diff_keys(old: &serde_json::Value, new: &serde_json::Value) -> String {
 
 /// Reset settings to factory defaults (overwrites the file)
 #[tauri::command]
-pub async fn reset_settings(app: AppHandle) -> Result<(), String> {
+pub async fn reset_settings() -> Result<(), String> {
     let defaults = AppSettings::default();
-    save_settings_to_disk(&app, &defaults)
+    save_settings_to_disk(&defaults)
 }
 
 #[tauri::command]
 pub async fn save_window_state(
-    app: AppHandle,
     width: u32,
     height: u32,
     x: i32,
     y: i32,
     maximized: bool,
 ) -> Result<(), String> {
-    save_window_state_sync(&app, width, height, x, y, maximized)
+    save_window_state_sync(width, height, x, y, maximized)
 }
 
 #[cfg(test)]

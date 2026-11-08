@@ -11,7 +11,10 @@
 use tauri::AppHandle;
 
 pub mod comm;
+pub mod out;
 pub mod state;
+
+pub use out::Out;
 
 /// Direct impl on `AppHandle` so the app layer can pass `&AppHandle` anywhere
 /// a `&dyn KernelOutput` is expected, and `Arc::new(app_handle.clone())` where
@@ -23,10 +26,10 @@ impl crate::kernel::output::KernelOutput for AppHandle {
             .unwrap_or(());
     }
     fn load_settings(&self) -> Result<Option<crate::settings::AppSettings>, String> {
-        crate::settings::load_settings_from_disk(self)
+        crate::settings::load_settings_from_disk()
     }
     fn data_dir(&self) -> std::path::PathBuf {
-        crate::storage::data_base(self)
+        crate::storage::data_base_static()
     }
     fn log_line(&self, msg: &str) {
         crate::commands::log_line(msg);

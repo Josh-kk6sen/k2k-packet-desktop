@@ -1,6 +1,6 @@
 [package]
 name = "k2k-packet-desktop"
-version = "0.11.34"
+version = "0.11.35"
 edition = "2021"
 
 [lib]
@@ -12,6 +12,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 chrono = "0.4"
+axum = { version = "0.8", features = ["ws"] }
+include_dir = "0.7"
+
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
