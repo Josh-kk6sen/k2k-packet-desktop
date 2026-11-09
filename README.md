@@ -20,10 +20,9 @@ Connects over TCP to any KISS-compatible or AGWPE TNC and provides a full connec
 - **AX.25 connected-mode** with a kernel-faithful protocol implementation
 - **Local Kantronics KPC3+ inspired PBBS**
 - Full **settings page** (protocol, callsign, fonts, colors, beacon, dedup)
-- Dark theme with the K2K color scheme
+- Six built-in themes — K2K dark by default, plus light, blue, sepia, synthwave, vintage, and more to come
 - **New headless mode.** Run app via the console with `--web` to serve a local browser based client. See below.
 - Windows, macOS, and Linux from a single codebase
-- Built with [Tauri](https://tauri.app) v2 (Rust backend, HTML/CSS/JS frontend)
 
 ## Architecture
 
