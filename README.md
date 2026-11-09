@@ -17,7 +17,7 @@ Connects over TCP to any KISS-compatible or AGWPE TNC and provides a full connec
 
 - **KISS or AGWPE over TCP** to any compatible TNC
 - **4 connection tabs** with chat, plus a live unproto (monitor) panel
-- **AX.25 connected-mode** with a kernel-faithful protocol implementation
+- **AX.25 2.2 connected-mode** — kernel state machine (STATE_0–3), SABM/UA/DISC handshake, T1/T2/T3 timers, N2 retries, RR/RNR/REJ flow control
 - **Local Kantronics KPC3+ inspired PBBS** — admin console, no RF
 - **Beacon** — periodic beacon with destination, via path, and interval settings
 - **KISS timing tuning** — T1/T2/T3, N2, P, slot, TX delay, kacheck, raw KISS mode
