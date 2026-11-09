@@ -22,7 +22,6 @@ Connects over TCP to any KISS-compatible or AGWPE TNC and provides a full connec
 - Full **settings page** (protocol, callsign, fonts, colors, beacon, dedup)
 - Six built-in themes — K2K dark by default, plus light, blue, sepia, synthwave, vintage, and more to come
 - **New headless mode.** Run app via the console with `--web` to serve a local browser based client. See below.
-- Windows, macOS, and Linux from a single codebase
 
 ## Architecture
 
