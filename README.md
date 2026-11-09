@@ -18,8 +18,15 @@ Connects over TCP to any KISS-compatible or AGWPE TNC and provides a full connec
 - **KISS or AGWPE over TCP** to any compatible TNC
 - **4 connection tabs** with chat, plus a live unproto (monitor) panel
 - **AX.25 connected-mode** with a kernel-faithful protocol implementation
-- **Local Kantronics KPC3+ inspired PBBS**
-- Full **settings page** (protocol, callsign, fonts, colors, beacon, dedup)
+- **Local Kantronics KPC3+ inspired PBBS** — admin console, no RF
+- **Beacon** — periodic beacon with destination, via path, and interval settings
+- **KISS timing tuning** — T1/T2/T3, N2, P, slot, TX delay, kacheck, raw KISS mode
+- **Packet deduplication** — monitor drops duplicate frames when toggled in the Unproto bar
+- **Ignored destinations** — filter NODES/BEACON/ID noise out of the monitor when Simple Unproto is toggled in the Unproto bar
+- **Notification sounds** — bell and connect audio with volume control
+- **Auto-connect on startup** — reconnect to the last TNC automatically
+- **NET/ROM monitor decoding** — labels NET/ROM frames instead of dumping hex
+- Full **settings page** (protocol, callsign, fonts, colors)
 - Six built-in themes — K2K dark by default, plus light, blue, sepia, synthwave, vintage, and more to come
 - **New headless mode.** Run app via the console with `--web` to serve a local browser based client. See below.
 
