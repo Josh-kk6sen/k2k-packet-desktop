@@ -33,7 +33,7 @@ rsync -a --delete \
 cd /build/src/src-tauri
 
 export CARGO_TARGET_DIR=/build/target
-cargo build --release --no-default-features --bin k2k-headless
+cargo build --release --no-default-features --features headless --bin k2k-headless
 
 BIN=/build/target/release/k2k-headless
 file "$BIN"

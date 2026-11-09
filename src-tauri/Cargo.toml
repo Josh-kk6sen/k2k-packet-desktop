@@ -1,6 +1,6 @@
 [package]
 name = "k2k-packet-desktop"
-version = "0.11.36"
+version = "0.11.37"
 edition = "2021"
 # Two binaries ship from this package: the desktop window app (src/main.rs) and
 # the GUI-free server (src/bin/k2k-headless.rs). Without this, cargo/tauri-cli
@@ -22,6 +22,20 @@ tauri-build = { version = "2", features = [] }
 # (`k2k-headless` / `--web`) build that installs on a lite Pi in seconds.
 default = ["desktop"]
 desktop = ["dep:tauri", "dep:tauri-plugin-shell", "dep:tauri-plugin-single-instance"]
+# `headless` only enables the extra `k2k-headless` binary target. It is NOT in
+# the default set: Tauri's bundler copies every binary in the package into the
+# .app/.deb, and the macOS universal build failed on exactly that — it looked
+# for target/universal-apple-darwin/release/k2k-headless, which cargo never
+# builds unless asked. Keep it out, and build the lean server explicitly with
+#   cargo build --release --no-default-features --features headless --bin k2k-headless
+headless = []
+
+# The lean, no-GUI-toolkit server. Gated so a normal desktop build/bundle only
+# ever contains k2k-packet-desktop.
+[[bin]]
+name = "k2k-headless"
+path = "src/bin/k2k-headless.rs"
+required-features = ["headless"]
 
 [dependencies]
 chrono = "0.4"
