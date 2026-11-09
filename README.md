@@ -18,7 +18,7 @@ Connects over TCP to any KISS-compatible or AGWPE TNC and provides a full connec
 - **KISS or AGWPE over TCP** to any compatible TNC
 - **4 connection tabs** with chat, plus a live unproto (monitor) panel
 - **AX.25 connected-mode** with a kernel-faithful protocol implementation
-- **Network support + local Kantronics KPC3+ inspired PBBS**
+- **Local Kantronics KPC3+ inspired PBBS**
 - Full **settings page** (protocol, callsign, fonts, colors, beacon, dedup)
 - Dark theme with the K2K color scheme
 - **New headless mode.** Run app via the console with `--web` to serve a local browser based client. See below.
