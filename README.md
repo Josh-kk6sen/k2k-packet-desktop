@@ -17,12 +17,11 @@ Connects over TCP to any KISS-compatible or AGWPE TNC and provides a full connec
 
 - **KISS or AGWPE over TCP** to any compatible TNC
 - **4 connection tabs** with chat, plus a live unproto (monitor) panel
-- **Callsign routing** via digipeaters (closest digipeater auto-selected)
 - **AX.25 connected-mode** with a kernel-faithful protocol implementation
-- **Network + local BBS / PBBS** support
+- **Network support + local Kantronics KPC3+ inspired PBBS**
 - Full **settings page** (protocol, callsign, fonts, colors, beacon, dedup)
 - Dark theme with the K2K color scheme
-- **Headless mode on every build** — run with `--web` to serve the same client to a browser, no GUI stack required
+- **New headless mode.** Run app via the console with `--web` to serve a local browser based client. See below.
 - Windows, macOS, and Linux from a single codebase
 - Built with [Tauri](https://tauri.app) v2 (Rust backend, HTML/CSS/JS frontend)
 
