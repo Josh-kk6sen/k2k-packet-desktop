@@ -131,6 +131,64 @@ jobs:
           dpkg-deb -f "$deb" Package Version Architecture Depends
           test "$(dpkg-deb -f "$deb" Architecture)" = "arm64"
 
+  # 32-bit ARM (Raspberry Pi OS 32-bit / DigiPi). GitHub has no armhf hosted
+  # runner, so this runs the same armv7 container build used locally, under qemu.
+  # This is the ONLY headless package: on every other platform the normal
+  # installer already carries both binaries (`--web` runs the window-less
+  # server), so there is nothing separate to download.
+  # needs: build-linux so the GitHub Release exists before we upload to it.
+  build-linux-armhf-headless:
+    name: Build Linux armhf headless .deb
+    runs-on: ubuntu-latest
+    needs: build-linux
+    if: github.event_name != 'workflow_dispatch' || contains(github.event.inputs.bundles, 'armhf') || contains(github.event.inputs.bundles, 'all')
+    steps:
+      - uses: actions/checkout@v5
+
+      # The headless build embeds dist/ at compile time. Build it here so the
+      # package can never carry a frontend older than the tag (the container
+      # build does not run vite itself).
+      - name: Setup Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Register arm binfmt (qemu)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+
+      # Without a binfmt entry the container silently runs x86 binaries and the
+      # failure shows up much later as an architecture error.
+      - name: Confirm armv7 emulation
+        run: docker run --rm --platform linux/arm/v7 debian:bookworm uname -m | grep -q armv7l
+
+      - name: Build headless armhf .deb
+        run: |
+          mkdir -p out
+          docker run --rm --platform linux/arm/v7 \
+            -v "$PWD":/src:ro \
+            -v "$PWD/packaging":/packaging:ro \
+            -v "$PWD/out":/out \
+            debian:bookworm bash /packaging/build-headless-armhf.sh
+
+      - name: Verify package architecture
+        run: |
+          deb=$(ls out/*.deb | head -1)
+          dpkg-deb -f "$deb" Package Version Architecture Depends
+          test "$(dpkg-deb -f "$deb" Architecture)" = "armhf"
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" out/*.deb --clobber
+
   build-windows:
     name: Build Windows .exe
     runs-on: windows-latest

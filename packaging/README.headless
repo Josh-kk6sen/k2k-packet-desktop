@@ -1,0 +1,42 @@
+K2K Packet Desktop — headless package
+=====================================
+
+This package installs `k2k-headless`, the same K2K backend as the desktop app
+but built without Tauri, GTK or WebKitGTK. It opens no window: it serves the
+normal K2K client over HTTP and WebSocket so you can drive it from a browser on
+another machine.
+
+Install size is a few MB and it pulls only libc/libgcc — no 350 MB GUI stack.
+
+Start it
+--------
+    k2k-headless                        # http://<this-host>:8080/
+    k2k-headless --port 8081            # another port
+    k2k-headless --bind 127.0.0.1       # loopback only
+
+As a service (disabled by default):
+
+    sudo systemctl enable --now k2k-headless
+    # edit User= / port in /lib/systemd/system/k2k-headless.service if needed
+
+What it needs
+-------------
+A KISS (or AGW) TNC reachable over TCP — e.g. Direwolf on the same Pi at
+127.0.0.1:8001. Enter that host/port in the app's connect bar.
+
+Data and logs
+-------------
+Everything lives in one directory, shared with the desktop build:
+
+    ~/.local/share/K2KDesktop/settings.json
+    ~/.local/share/K2KDesktop/pbbs_data.json
+    ~/.local/share/K2KDesktop/history.json
+    ~/.local/share/K2KDesktop/logs/YYMMDD_<kind>.log
+
+(Or $XDG_DATA_HOME/K2KDesktop when that is set.) The URL the server chose is
+also written to web-client.txt in that folder.
+
+Security
+--------
+There is no password and no TLS. Bind to 127.0.0.1, or keep it on a trusted
+LAN / behind a reverse proxy.

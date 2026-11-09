@@ -1,0 +1,18 @@
+[Unit]
+Description=K2K Packet Desktop (headless, browser-served)
+Documentation=file:/usr/share/doc/k2k-packet-headless/README
+# Only starts if you enable it: `sudo systemctl enable --now k2k-headless`
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# It writes settings.json / pbbs_data.json / logs to this user's
+# ~/.local/share/K2KDesktop — keep it the account that owns the radio setup.
+User=pi
+ExecStart=/usr/bin/k2k-headless --bind 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
