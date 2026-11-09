@@ -2079,7 +2079,7 @@ dependencies = [
 
 [[package]]
 name = "k2k-packet-desktop"
-version = "0.11.35"
+version = "0.11.36"
 dependencies = [
  "axum",
  "chrono",

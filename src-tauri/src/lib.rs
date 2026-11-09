@@ -19,6 +19,8 @@ mod live_test;
 #[allow(dead_code)]
 mod link;
 mod settings;
+#[cfg(not(feature = "desktop"))]
+mod shim;
 mod storage;
 mod web;
 
@@ -27,7 +29,9 @@ mod web;
 // visibility — do NOT switch these to `pub use kernel::…::*;`).
 pub use kernel::{ax25, bbs, bbs_link, netrom, session};
 
+#[cfg(feature = "desktop")]
 use settings::restore_window_state;
+#[cfg(feature = "desktop")]
 use tauri::Manager;
 use std::sync::OnceLock;
 
@@ -117,6 +121,7 @@ pub fn run_web(opts: WebOptions) -> Result<(), String> {
 ///   3. Registers all IPC command handlers
 ///   4. Restores the window position/size from saved settings
 ///   5. Saves window position on close
+#[cfg(feature = "desktop")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

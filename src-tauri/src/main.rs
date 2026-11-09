@@ -81,7 +81,14 @@ fn main() {
         return;
     }
 
-    k2k_packet_desktop_lib::run()
+    // The desktop window exists only in a `desktop`-feature build. A headless
+    // package ships this same argument parser so `--web` behaves identically,
+    // but there is no window to open.
+    #[cfg(feature = "desktop")]
+    k2k_packet_desktop_lib::run();
+
+    #[cfg(not(feature = "desktop"))]
+    fail("This build is headless: run `k2k-headless --web [--port 8080]`")
 }
 
 fn fail(msg: &str) -> ! {

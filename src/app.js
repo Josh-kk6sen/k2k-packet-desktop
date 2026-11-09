@@ -246,6 +246,10 @@ async function connectTnc() {
     }, 100);
     return;
   }
+  // Browser front-end: this server may already hold the TNC connection
+  // because another tab dialled it. Reuse that connection instead of
+  // redialling (a second connect to the same host:port tears the first down).
+  if (await adoptExistingConnection(hostv, Number(portv))) return;
   const parts = callsign.split("-");
   const base = parts[0];
   const ssid = parseInt(parts[1]) || 0;
@@ -839,6 +843,46 @@ function applyPanelVisibility() {
   if (dv) dv.style.display = settings.onlyUnproto ? "none" : "";
 }
 
+// ── Browser mode: share one TNC connection between tabs ───
+//
+// Every browser tab talks to the SAME backend process, so there is only one
+// real TNC connection to have. A second tab used to dial its own connection,
+// which tears down the first (kiss_connect calls remove_connections_to for the
+// same host:port) — that dropped the live AX.25 link and left the older tab
+// sending against a dead id ("Connection not found"). Adopting the connection
+// the server already reports keeps the link up and every tab usable.
+//
+// Desktop mode returns false: a WebView has its own backend, so there is
+// nothing to share.
+function adoptExistingConnection(host, port) {
+  if (!isWeb) return Promise.resolve(false);
+  // Ask the server, do NOT trust the page-load snapshot: it is only sent once
+  // per connection, so after a disconnect it still lists the dead connection
+  // and a re-Connect would "adopt" something that no longer exists.
+  return fetch("/api/state")
+    .then((r) => r.json())
+    .then((st) => adoptFromList(st && st.connections, host, port))
+    .catch(() => false);
+}
+
+function adoptFromList(list, host, port) {
+  const live = (list || []).find(
+    (c) => c.connected && c.host === host && Number(c.port) === Number(port)
+  );
+  if (!live) return false;
+  conn = { id: live.id, host: live.host, port: live.port, cx: true };
+  hostEl.value = live.host;
+  portEl.value = live.port;
+  hostEl.disabled = true;
+  portEl.disabled = true;
+  setConnStatus("connected", "Connected");
+  setConnectBtn("Disconnect", "disconnect");
+  sendBtn.disabled = false;
+  unprotoSend.disabled = false;
+  tabMsg(activeTab, "sys", "Using the TNC connection this server already has: " + live.host + ":" + live.port);
+  return true;
+}
+
 async function loadSettings() {
   try {
     const t = await invoke("load_settings");
@@ -851,7 +895,17 @@ async function loadSettings() {
     if (t.unprotoVia) unprotoVia.value = t.unprotoVia;
     syncViaRevState();
     applyFontsAndTheme();
-    if (t.autoConnect && t.callsign && t.host) setTimeout(() => connectBtn.click(), 500);
+    if (t.autoConnect && t.callsign && t.host) {
+      setTimeout(async () => {
+        // A browser front-end shares ONE backend between tabs. If another tab
+        // already holds the TNC connection, adopt it instead of dialling
+        // again: a second kiss_connect to the same host:port deliberately
+        // tears the first one down (remove_connections_to), which drops the
+        // live AX.25 link and leaves the older tab's connection id pointing at
+        // nothing — the "Connection not found" error on send.
+        if (!(await adoptExistingConnection(t.host, Number(t.port)))) connectBtn.click();
+      }, 500);
+    }
     $("#u-dedup-btn").classList.toggle("active", settings.deduplicatePackets);
     $("#u-simple-btn").classList.toggle("active", settings.simpleUnproto);
     $("#u-only-btn").classList.toggle("active", settings.onlyUnproto);

@@ -18,19 +18,30 @@ use crate::kernel::output::KernelOutput;
 use crate::settings::AppSettings;
 use std::path::PathBuf;
 use std::sync::Arc;
+#[cfg(feature = "desktop")]
 use tauri::AppHandle;
 
 #[derive(Clone)]
 pub struct Out(Arc<Inner>);
 
 enum Inner {
+    #[cfg(feature = "desktop")]
     Tauri(AppHandle),
     Web(Arc<crate::web::Sink>),
 }
 
 impl Out {
+    #[cfg(feature = "desktop")]
     pub fn tauri(handle: AppHandle) -> Self {
         Self(Arc::new(Inner::Tauri(handle)))
+    }
+
+    /// Headless builds never hold a window handle. The `#[tauri::command]`
+    /// wrappers still name this constructor so they compile; `shim::AppHandle`
+    /// is uninhabited, so it cannot actually be called.
+    #[cfg(not(feature = "desktop"))]
+    pub fn tauri(_handle: crate::shim::AppHandle) -> Self {
+        unreachable!("no window sink exists in a headless build")
     }
 
     pub fn web(sink: Arc<crate::web::Sink>) -> Self {
@@ -41,6 +52,7 @@ impl Out {
 impl KernelOutput for Out {
     fn emit(&self, event: &str, payload: serde_json::Value) {
         match &*self.0 {
+            #[cfg(feature = "desktop")]
             Inner::Tauri(handle) => {
                 let _ = tauri::Emitter::emit(handle, event, payload);
             }

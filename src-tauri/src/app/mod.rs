@@ -8,6 +8,7 @@
 // `KernelOutput` for `AppHandle` (below) is where an `AppHandle` is turned
 // into outward effects (events, settings access, data dir, logs).
 
+#[cfg(feature = "desktop")]
 use tauri::AppHandle;
 
 pub mod comm;
@@ -19,6 +20,10 @@ pub use out::Out;
 /// Direct impl on `AppHandle` so the app layer can pass `&AppHandle` anywhere
 /// a `&dyn KernelOutput` is expected, and `Arc::new(app_handle.clone())` where
 /// an owned output is needed — no wrapping boilerplate at call sites.
+///
+/// Desktop only: a headless build has no `AppHandle`, and its output sink is
+/// `Out::web(sink)` (see `web.rs`).
+#[cfg(feature = "desktop")]
 impl crate::kernel::output::KernelOutput for AppHandle {
     fn emit(&self, event: &str, payload: serde_json::Value) {
         tauri::Emitter::emit(self, event, payload)

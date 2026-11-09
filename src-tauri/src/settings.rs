@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+#[cfg(feature = "desktop")]
 use tauri::AppHandle;
+#[cfg(feature = "desktop")]
 use tauri::Manager;
 
 /// Connection protocol as stored in settings.json. The stored value is
@@ -462,6 +464,7 @@ pub fn geometry_visible_on(x: i32, y: i32, monitors: &[(i32, i32, u32, u32)]) ->
     })
 }
 
+#[cfg(feature = "desktop")]
 fn monitor_rects(window: &tauri::WebviewWindow) -> Vec<(i32, i32, u32, u32)> {
     match window.available_monitors() {
         Ok(ms) => ms
@@ -477,6 +480,8 @@ fn monitor_rects(window: &tauri::WebviewWindow) -> Vec<(i32, i32, u32, u32)> {
 }
 
 /// Setup-time restore: read settings and apply window geometry
+/// (desktop only — a headless build has no window to place).
+#[cfg(feature = "desktop")]
 pub fn restore_window_state(app: &AppHandle) -> Result<(), String> {
     let Ok(Some(settings)) = load_settings_from_disk() else { return Ok(()); };
     let Some(window) = app.get_webview_window("main") else { return Ok(()); };
@@ -542,7 +547,7 @@ pub fn sanitize_unproto_colors(colors: &mut Option<HashMap<String, UnprotoThemeC
     map.retain(|theme, _| THEME_NAMES.contains(&theme.as_str()));
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn save_settings(mut settings: AppSettings) -> Result<(), String> {
     // The main settings dialog and the quick toggles (dedup, simple unproto,
     // last To/Via…) build their save payload without unproto_colors. Preserve
@@ -583,7 +588,7 @@ pub async fn save_settings(mut settings: AppSettings) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn load_settings() -> Result<AppSettings, String> {
     let settings = load_settings_or_default();
     // Write default settings.json if it didn't exist yet (fresh install)
@@ -613,13 +618,13 @@ fn diff_keys(old: &serde_json::Value, new: &serde_json::Value) -> String {
 }
 
 /// Reset settings to factory defaults (overwrites the file)
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn reset_settings() -> Result<(), String> {
     let defaults = AppSettings::default();
     save_settings_to_disk(&defaults)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn save_window_state(
     width: u32,
     height: u32,

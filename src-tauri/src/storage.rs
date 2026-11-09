@@ -11,7 +11,9 @@
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
+#[cfg(feature = "desktop")]
 use tauri::AppHandle;
+#[cfg(feature = "desktop")]
 use tauri::Manager;
 
 /// The one data directory for this process. Set at startup; see `set_data_dir`.
@@ -72,6 +74,11 @@ pub fn app_data_path_static(file: &str) -> PathBuf {
 }
 
 /// The single base directory for all app data (see `app_data_path`).
+///
+/// Desktop only: it asks Tauri for the platform data dir on first run. The
+/// headless entry point pins the directory itself (`init_headless_data_dir`),
+/// so every later lookup goes through `data_base_static`.
+#[cfg(feature = "desktop")]
 pub fn data_base(app: &AppHandle) -> PathBuf {
     if DATA_DIR.get().is_some() {
         return data_base_static();

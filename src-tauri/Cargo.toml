@@ -1,6 +1,6 @@
 [package]
 name = "k2k-packet-desktop"
-version = "0.11.35"
+version = "0.11.36"
 edition = "2021"
 
 [lib]
@@ -10,14 +10,21 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[features]
+# `desktop` (default) is the Tauri window build: GTK + WebKitGTK.
+# `--no-default-features` links no Tauri at all — that is the headless
+# (`k2k-headless` / `--web`) build that installs on a lite Pi in seconds.
+default = ["desktop"]
+desktop = ["dep:tauri", "dep:tauri-plugin-shell", "dep:tauri-plugin-single-instance"]
+
 [dependencies]
 chrono = "0.4"
 axum = { version = "0.8", features = ["ws"] }
 include_dir = "0.7"
 
-tauri = { version = "2", features = ["tray-icon"] }
-tauri-plugin-shell = "2"
-tauri-plugin-single-instance = "2"
+tauri = { version = "2", features = ["tray-icon"], optional = true }
+tauri-plugin-shell = { version = "2", optional = true }
+tauri-plugin-single-instance = { version = "2", optional = true }
 opener = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
