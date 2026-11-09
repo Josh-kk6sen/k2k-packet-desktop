@@ -2,6 +2,12 @@
 name = "k2k-packet-desktop"
 version = "0.11.36"
 edition = "2021"
+# Two binaries ship from this package: the desktop window app (src/main.rs) and
+# the GUI-free server (src/bin/k2k-headless.rs). Without this, cargo/tauri-cli
+# pick whichever binary they find first and the desktop bundle ends up wrapping
+# k2k-headless — a window-less binary in a package whose dependencies assume a
+# WebView.
+default-run = "k2k-packet-desktop"
 
 [lib]
 name = "k2k_packet_desktop_lib"
