@@ -1219,8 +1219,10 @@ pub async fn process_incoming_frame(
         let src_label = ax25::fmt_call(&f.src, f.src_ssid);
         let dest_label = ax25::fmt_call(&f.dest, f.dest_ssid);
 
-        // Step 4: Detect NET/ROM frames (PID = 0x01 or 0xCF)
-        let is_netrom = f.pid == 0x01 || f.pid == 0xCF;
+        // Step 4: Detect NET/ROM frames. NET/ROM's AX.25 layer-3 PID is 0xCF
+        // and only 0xCF — 0x01 is the "layer 3 implemented" PID bit pattern,
+        // not a NET/ROM frame, and labelling it NET/ROM hid the real PID.
+        let is_netrom = f.pid == 0xCF;
 
         if is_netrom {
             emit_netrom_frame(
@@ -1283,7 +1285,8 @@ async fn emit_netrom_frame(
     pid: u8,
     raw_kiss_hex: &str,
 ) {
-    let pid_str = if pid == 0x01 { "01" } else { "CF" };
+    // Callers only reach here for PID 0xCF; print the PID from the frame.
+    let pid_str = format!("{:02X}", pid);
     let via_str = ax25::fmt_via(digis);
 
     if let Some((netrom_display, _header_suffix)) = crate::netrom::parse_netrom_frame(info) {

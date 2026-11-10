@@ -401,16 +401,19 @@ pub fn actual_pid(verbose_pid: &str, header_pid: u8) -> u8 {
 
 /// Build the display triple for a monitored/own payload: NET/ROM gets its
 /// decoded text (or a hex dump), text PID gets "(Text)" labeling, anything
-/// else shows the raw hex PID. `payload` feeds NET/ROM detection (raw
-/// bytes — the monitor arm keeps these unstripped), `display` is what the
-/// text branches render (the monitor arm strips line-number prefixes here).
+/// else shows the raw hex PID. `payload` feeds NET/ROM parsing (raw bytes —
+/// the monitor arm keeps these unstripped), `display` is what the text
+/// branches render (the monitor arm strips line-number prefixes here).
 pub fn format_monitor_payload(
     payload: &[u8],
     display: &[u8],
     actual_pid_byte: u8,
     fallback_ft: &str,
 ) -> (String, String, String) {
-    let is_netrom = actual_pid_byte == 0xCF || payload.first() == Some(&0xFF);
+    // NET/ROM is identified by its PID alone. The old `payload[0] == 0xFF`
+    // sniff pulled non-NET/ROM payloads into this branch and relabelled them
+    // "CF(NET/ROM)", hiding the PID the frame actually carried.
+    let is_netrom = actual_pid_byte == 0xCF;
     if is_netrom {
         if let Some((netrom_display, _suffix)) = crate::netrom::parse_netrom_frame(payload) {
             (

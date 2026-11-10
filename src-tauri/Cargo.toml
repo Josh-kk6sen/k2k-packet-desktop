@@ -1,6 +1,6 @@
 [package]
 name = "k2k-packet-desktop"
-version = "0.11.37"
+version = "0.11.38"
 edition = "2021"
 # Two binaries ship from this package: the desktop window app (src/main.rs) and
 # the GUI-free server (src/bin/k2k-headless.rs). Without this, cargo/tauri-cli
