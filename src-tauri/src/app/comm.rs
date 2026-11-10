@@ -554,6 +554,74 @@ mod tests {
         assert_eq!(agw_radio_header("KK6SEN-0", "COOL", "via KBANN", "I", "F0", 3),
                    "radio: KK6SEN-0 to COOL via KBANN ctl I pid=F0 len 3");
     }
+
+    // ── NET/ROM classification (AGWPE / monitor arm) ──────────────────────
+    //
+    // NET/ROM is PID 0xCF and nothing else. A payload that merely starts with
+    // 0xFF used to be drafted into the NET/ROM branch and relabelled
+    // "CF(NET/ROM)", hiding the PID the frame really carried.
+
+    fn hex(s: &str) -> Vec<u8> {
+        s.split_whitespace()
+            .map(|t| u8::from_str_radix(t, 16).unwrap())
+            .collect()
+    }
+
+    /// Real capture: K6BER-5's NODES broadcast (0xFF + name + 6 × 21-byte routes).
+    const BCAST: &str = "ff 42 45 52 52 59 20 9c 6c 84 a6 a6 40 08 23 44 49 47 49 20 9c 6c 84 \
+                         a6 a6 40 08 46 96 92 6c b4 90 88 0a 53 43 4c 41 52 41 96 92 6c b4 90 88 0a 46";
+
+    /// Real capture: NET/ROM L3 data — the frame that used to print a fake
+    /// routing table (a 0xFF-leading payload is only *coincidentally* absent
+    /// here; the old sniff also mislabelled non-0xCF payloads).
+    const L3_DATA: &str = "96 8c 6c 82 9c b0 08 96 6c 8c 84 40 40 0b 19 01 18 00 01 05 4a 4f 48 \
+                           4e 3a 4b 46 36 41 4e 58 2d 34 7d 20 43 6f 6e 6e 65 63 74 65 64 20 74 6f \
+                           20 4a 42 4f 58 0d";
+
+    #[test]
+    fn text_pid_with_ff_payload_stays_text() {
+        // A 0xFF-leading payload under a text PID must keep its own label —
+        // this is exactly what the removed `payload[0] == 0xFF` sniff broke.
+        let payload = hex(BCAST);
+        let (display, pid_label, frame_type) =
+            format_monitor_payload(&payload, &payload, 0xF0, "UI");
+        assert_eq!(pid_label, "F0(Text)");
+        assert_eq!(frame_type, "UI");
+        assert!(!display.contains("NET/ROM"), "{display}");
+    }
+
+    #[test]
+    fn netrom_pid_decodes_routing_broadcast() {
+        let payload = hex(BCAST);
+        let (display, pid_label, frame_type) =
+            format_monitor_payload(&payload, &payload, 0xCF, "UI");
+        assert_eq!(pid_label, "CF(NET/ROM)");
+        assert_eq!(frame_type, "NET/ROM");
+        assert!(display.starts_with("NET/ROM Routing: BERRY"), "{display}");
+        assert!(display.contains("N6BSS-4"), "{display}");
+    }
+
+    #[test]
+    fn netrom_pid_decodes_l3_data_not_routing() {
+        let payload = hex(L3_DATA);
+        let (display, pid_label, _) = format_monitor_payload(&payload, &payload, 0xCF, "I");
+        assert_eq!(pid_label, "CF(NET/ROM)");
+        assert!(
+            display.starts_with("NET/ROM data: KF6ANX-4 -> K6FB-5"),
+            "{display}"
+        );
+        assert!(!display.contains("Routing"), "{display}");
+    }
+
+    #[test]
+    fn netrom_pid_with_unknown_shape_falls_back_to_hex() {
+        // Correct PID, bytes that are not a NET/ROM header: keep the label,
+        // dump hex, and do not invent a decode.
+        let payload = hex("de ad be ef de ad be ef de ad be ef de ad be ef de ad be ef de ad be ef");
+        let (display, pid_label, _) = format_monitor_payload(&payload, &payload, 0xCF, "UI");
+        assert_eq!(pid_label, "CF(NET/ROM)");
+        assert!(display.starts_with("[NET/ROM] "), "{display}");
+    }
 }
 #[cfg(test)]
 mod tnc_error_message_tests {
