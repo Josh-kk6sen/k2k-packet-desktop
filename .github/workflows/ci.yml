@@ -128,6 +128,12 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --all-targets --message-format short
 
+      # The tree is rustfmt-clean as of the "style: cargo fmt" commit, and the
+      # autoformat hook keeps it that way locally. This stops it drifting.
+      - name: cargo fmt --check
+        working-directory: src-tauri
+        run: cargo fmt --check
+
       - name: cargo deny (advisories, licenses, bans)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
