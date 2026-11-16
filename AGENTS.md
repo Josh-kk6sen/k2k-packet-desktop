@@ -41,7 +41,8 @@ cd src-tauri && cargo check && cargo test
 
 1. `cd src-tauri && cargo check`
 2. `cd src-tauri && cargo test` (all green)
-3. `node --check` on every changed `.js`, or `npm run build` when modules changed
+3. `cd src-tauri && cargo fmt --check` — the tree is rustfmt-clean and CI enforces it
+4. `node --check` on every changed `.js`, or `npm run build` when modules changed
 
 Report what you actually ran. Never claim a build or behaviour you did not
 exercise. If a step was skipped, say so.
