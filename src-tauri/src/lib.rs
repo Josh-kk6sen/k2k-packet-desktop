@@ -31,9 +31,9 @@ pub use kernel::{ax25, bbs, bbs_link, netrom, session};
 
 #[cfg(feature = "desktop")]
 use settings::restore_window_state;
+use std::sync::OnceLock;
 #[cfg(feature = "desktop")]
 use tauri::Manager;
-use std::sync::OnceLock;
 
 /// Global path to the application log file, set once at startup.
 /// Directory holding settings.json, pbbs_data.json and the daily log files.
@@ -43,10 +43,7 @@ pub static LOG_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
 /// "admin", "settings"): <log_dir>/YYMMDD_<kind>.log — one file per day,
 /// kept indefinitely.
 pub fn daily_log_path(kind: &str) -> std::path::PathBuf {
-    let dir = LOG_DIR
-        .get()
-        .cloned()
-        .unwrap_or_else(std::env::temp_dir);
+    let dir = LOG_DIR.get().cloned().unwrap_or_else(std::env::temp_dir);
     dir.join(format!(
         "{}_{}.log",
         chrono::Local::now().format("%y%m%d"),
@@ -58,7 +55,11 @@ pub fn daily_log_path(kind: &str) -> std::path::PathBuf {
 pub fn append_log(kind: &str, text: &str) {
     use std::io::Write;
     let path = daily_log_path(kind);
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
         let _ = writeln!(f, "{}", text);
     }
 }
@@ -77,12 +78,8 @@ pub struct WebOptions {
 pub fn run_web(opts: WebOptions) -> Result<(), String> {
     let data_base = crate::storage::init_headless_data_dir();
     let log_dir = data_base.join("logs");
-    std::fs::create_dir_all(&log_dir).map_err(|e| {
-        format!(
-            "Cannot create log folder {}: {e}",
-            log_dir.display()
-        )
-    })?;
+    std::fs::create_dir_all(&log_dir)
+        .map_err(|e| format!("Cannot create log folder {}: {e}", log_dir.display()))?;
     let _ = LOG_DIR.set(log_dir.clone());
     append_log(
         "raw",
@@ -194,7 +191,13 @@ pub fn run() {
                 if old_base == data_base {
                     continue;
                 }
-                for f in ["settings.json", "settings.json.bak", "history.json", "pbbs_data.json", "pbbs_data.json.bak"] {
+                for f in [
+                    "settings.json",
+                    "settings.json.bak",
+                    "history.json",
+                    "pbbs_data.json",
+                    "pbbs_data.json.bak",
+                ] {
                     let src = old_base.join(f);
                     let dst = data_base.join(f);
                     if src.exists() && !dst.exists() {
@@ -223,7 +226,13 @@ pub fn run() {
             let _ = std::fs::create_dir_all(&log_dir);
             let _ = LOG_DIR.set(log_dir.clone());
             // Startup header in today's raw log
-            append_log("raw", &format!("=== K2K Packet Desktop v{} started ===", env!("CARGO_PKG_VERSION")));
+            append_log(
+                "raw",
+                &format!(
+                    "=== K2K Packet Desktop v{} started ===",
+                    env!("CARGO_PKG_VERSION")
+                ),
+            );
 
             // Create the main window ourselves (instead of letting the
             // tauri.conf.json config auto-create it) so we can point the
@@ -234,10 +243,7 @@ pub fn run() {
             let handle = app.handle();
             // Window title carries the version, read from the bundle itself so
             // it can never drift from the build (no hand-maintained string).
-            let win_title = format!(
-                "K2K Packet Desktop  v{}",
-                handle.package_info().version
-            );
+            let win_title = format!("K2K Packet Desktop  v{}", handle.package_info().version);
             let wb = tauri::WebviewWindowBuilder::new(
                 handle,
                 "main",
@@ -272,14 +278,18 @@ pub fn run() {
                         return;
                     }
                     let maximized = window.is_maximized().unwrap_or(false);
-                    let Some(size) = window.outer_size().ok() else { return; };
+                    let Some(size) = window.outer_size().ok() else {
+                        return;
+                    };
                     // Never persist a degenerate size (a minimized/hidden
                     // window can report 0x0). Saving that is what hides the
                     // app on the next launch.
                     if size.width < settings::MIN_WIN_W || size.height < settings::MIN_WIN_H {
                         return;
                     }
-                    let Some(pos) = window.outer_position().ok() else { return; };
+                    let Some(pos) = window.outer_position().ok() else {
+                        return;
+                    };
                     let _ = settings::save_window_state_sync(
                         size.width,
                         size.height,

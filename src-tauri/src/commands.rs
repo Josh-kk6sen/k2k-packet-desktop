@@ -10,7 +10,11 @@ use tokio::io::{AsyncReadExt, BufReader};
 use tokio::sync::Mutex;
 
 use crate::agw;
-use crate::app::comm::{actual_pid, agw_radio_header, emit_sent_frame, fallback_frame_type, format_monitor_payload, format_radio_header, parse_verbose_frame_type, parse_verbose_pid, parse_verbose_via, session_send_state, split_after_verbose_header, store_pending_iframe, strip_agw_line_prefix};
+use crate::app::comm::{
+    actual_pid, agw_radio_header, emit_sent_frame, fallback_frame_type, format_monitor_payload,
+    format_radio_header, parse_verbose_frame_type, parse_verbose_pid, parse_verbose_via,
+    session_send_state, split_after_verbose_header, store_pending_iframe, strip_agw_line_prefix,
+};
 use crate::ax25;
 use crate::kernel::output::KernelOutput;
 use crate::kiss;
@@ -83,11 +87,6 @@ pub(crate) fn log_line(msg: &str) {
 // ── Display-string helpers ─────────────────────────────────
 
 /// Format a digipeater via path: `"via CALL CALL"` or `""` when empty.
-
-
-
-
-
 
 /// Strip the AGWPE line-number prefix ("1:Fm ..." → "Fm ...") from each
 /// line of a monitor payload — TNCs prefix received lines with the
@@ -288,7 +287,12 @@ fn spawn_agw_reader(
 /// new one. Prevents duplicate beacon timers when auto-connect fires and
 /// the user also clicks Connect manually.
 async fn remove_connections_to(state: &session::AppState, host: &str, port: u16) {
-    state.core.lock().await.remove_connections_to(host, port).await;
+    state
+        .core
+        .lock()
+        .await
+        .remove_connections_to(host, port)
+        .await;
 }
 
 /// True when the named connection is an AGWPE (Direwolf) link.
@@ -543,11 +547,39 @@ pub(crate) fn spawn_beacon(
 /// The connection is stored in AppState so other commands (ax25_connect,
 /// ax25_send_iframe, etc.) can find it by ID.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn kiss_connect(id: String, label: String, host: String, port: u16, callsign: String, ssid: u8, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    kiss_connect_impl(&state, crate::app::Out::tauri(app_handle), id, label, host, port, callsign, ssid) .await
+pub async fn kiss_connect(
+    id: String,
+    label: String,
+    host: String,
+    port: u16,
+    callsign: String,
+    ssid: u8,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    kiss_connect_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        id,
+        label,
+        host,
+        port,
+        callsign,
+        ssid,
+    )
+    .await
 }
 
-pub async fn kiss_connect_impl(state: &session::AppState, app_handle: crate::app::Out, id: String, label: String, host: String, port: u16, callsign: String, ssid: u8) -> Result<(), String> {
+pub async fn kiss_connect_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    id: String,
+    label: String,
+    host: String,
+    port: u16,
+    callsign: String,
+    ssid: u8,
+) -> Result<(), String> {
     let addr = format!("{}:{}", host, port);
 
     // Drop any existing connection to the same host:port first (see
@@ -555,8 +587,7 @@ pub async fn kiss_connect_impl(state: &session::AppState, app_handle: crate::app
     // auto-connect fires and the user also clicks Connect manually.
     remove_connections_to(state, &host, port).await;
 
-    let (reader, writer, timing) =
-        crate::app::comm::open_tcp_stream(&addr, &app_handle).await?;
+    let (reader, writer, timing) = crate::app::comm::open_tcp_stream(&addr, &app_handle).await?;
 
     // Build the client struct with 4 empty sessions (C1–C4)
     let client = session::TcpClient::new(
@@ -608,8 +639,8 @@ pub async fn kiss_connect_impl(state: &session::AppState, app_handle: crate::app
 
     // Register the connection in global state
     {
-            let mut core = state.core.lock().await;
-    let conns = &mut core.connections;
+        let mut core = state.core.lock().await;
+        let conns = &mut core.connections;
         conns.push(client_arc.clone());
     }
 
@@ -637,11 +668,36 @@ pub async fn kiss_connect_impl(state: &session::AppState, app_handle: crate::app
 /// Sets the session state to AwaitingConnect and sends the SABM.
 /// The session moves to Connected when a UA is received back (handled in session.rs).
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn ax25_connect(conn_id: String, tab: usize, remote: String, remote_ssid: u8, via: String, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    ax25_connect_impl(&state, crate::app::Out::tauri(app_handle), conn_id, tab, remote, remote_ssid, via) .await
+pub async fn ax25_connect(
+    conn_id: String,
+    tab: usize,
+    remote: String,
+    remote_ssid: u8,
+    via: String,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    ax25_connect_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        conn_id,
+        tab,
+        remote,
+        remote_ssid,
+        via,
+    )
+    .await
 }
 
-pub async fn ax25_connect_impl(state: &session::AppState, app_handle: crate::app::Out, conn_id: String, tab: usize, remote: String, remote_ssid: u8, via: String) -> Result<(), String> {
+pub async fn ax25_connect_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    conn_id: String,
+    tab: usize,
+    remote: String,
+    remote_ssid: u8,
+    via: String,
+) -> Result<(), String> {
     check_tab(tab)?;
 
     let client_arc = find_client(state, &conn_id)
@@ -724,11 +780,30 @@ pub async fn ax25_connect_impl(state: &session::AppState, app_handle: crate::app
 /// retransmission if no ACK is received within T1_MS milliseconds.
 /// On N2_MAX failures, the session is disconnected.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn ax25_send_iframe(conn_id: String, tab: usize, text: String, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    ax25_send_iframe_impl(&state, crate::app::Out::tauri(app_handle), conn_id, tab, text) .await
+pub async fn ax25_send_iframe(
+    conn_id: String,
+    tab: usize,
+    text: String,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    ax25_send_iframe_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        conn_id,
+        tab,
+        text,
+    )
+    .await
 }
 
-pub async fn ax25_send_iframe_impl(state: &session::AppState, app_handle: crate::app::Out, conn_id: String, tab: usize, text: String) -> Result<(), String> {
+pub async fn ax25_send_iframe_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    conn_id: String,
+    tab: usize,
+    text: String,
+) -> Result<(), String> {
     check_tab(tab)?;
 
     let client_arc = find_client(state, &conn_id)
@@ -845,11 +920,21 @@ pub async fn ax25_send_iframe_impl(state: &session::AppState, app_handle: crate:
 /// If the session is AwaitingConnect (never established), transitions directly
 /// to Disconnected without sending anything.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn ax25_disconnect(conn_id: String, tab: usize, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    ax25_disconnect_impl(&state, crate::app::Out::tauri(app_handle), conn_id, tab) .await
+pub async fn ax25_disconnect(
+    conn_id: String,
+    tab: usize,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    ax25_disconnect_impl(&state, crate::app::Out::tauri(app_handle), conn_id, tab).await
 }
 
-pub async fn ax25_disconnect_impl(state: &session::AppState, app_handle: crate::app::Out, conn_id: String, tab: usize) -> Result<(), String> {
+pub async fn ax25_disconnect_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    conn_id: String,
+    tab: usize,
+) -> Result<(), String> {
     check_tab(tab)?;
 
     let client_arc = find_client(state, &conn_id)
@@ -948,11 +1033,36 @@ pub async fn ax25_disconnect_impl(state: &session::AppState, app_handle: crate::
 /// UI frames are used for APRS, beacons, and other broadcast-style
 /// transmissions that don't require a connected session.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn ax25_send_ui(conn_id: String, dest: String, dest_ssid: u8, text: String, via: String, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    ax25_send_ui_impl(&state, crate::app::Out::tauri(app_handle), conn_id, dest, dest_ssid, text, via) .await
+pub async fn ax25_send_ui(
+    conn_id: String,
+    dest: String,
+    dest_ssid: u8,
+    text: String,
+    via: String,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    ax25_send_ui_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        conn_id,
+        dest,
+        dest_ssid,
+        text,
+        via,
+    )
+    .await
 }
 
-pub async fn ax25_send_ui_impl(state: &session::AppState, app_handle: crate::app::Out, conn_id: String, dest: String, dest_ssid: u8, text: String, via: String) -> Result<(), String> {
+pub async fn ax25_send_ui_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    conn_id: String,
+    dest: String,
+    dest_ssid: u8,
+    text: String,
+    via: String,
+) -> Result<(), String> {
     let client_arc = find_client(state, &conn_id)
         .await
         .ok_or_else(|| "Connection not found".to_string())?;
@@ -1006,8 +1116,11 @@ pub async fn ax25_send_ui_impl(state: &session::AppState, app_handle: crate::app
 /// Aborts the reader task, all keep-alive timers, and the ID beacon.
 /// Removes the connection from global AppState.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn kiss_disconnect(id: String, state: tauri::State<'_, session::AppState>) -> Result<(), String> {
-    kiss_disconnect_impl(&state, id) .await
+pub async fn kiss_disconnect(
+    id: String,
+    state: tauri::State<'_, session::AppState>,
+) -> Result<(), String> {
+    kiss_disconnect_impl(&state, id).await
 }
 
 pub async fn kiss_disconnect_impl(state: &session::AppState, id: String) -> Result<(), String> {
@@ -1023,11 +1136,39 @@ pub async fn kiss_disconnect_impl(state: &session::AppState, id: String) -> Resu
 
 /// Connect to an AGWPE server and register our callsign.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn agw_connect(id: String, label: String, host: String, port: u16, callsign: String, ssid: u8, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    agw_connect_impl(&state, crate::app::Out::tauri(app_handle), id, label, host, port, callsign, ssid) .await
+pub async fn agw_connect(
+    id: String,
+    label: String,
+    host: String,
+    port: u16,
+    callsign: String,
+    ssid: u8,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    agw_connect_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        id,
+        label,
+        host,
+        port,
+        callsign,
+        ssid,
+    )
+    .await
 }
 
-pub async fn agw_connect_impl(state: &session::AppState, app_handle: crate::app::Out, id: String, label: String, host: String, port: u16, callsign: String, ssid: u8) -> Result<(), String> {
+pub async fn agw_connect_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    id: String,
+    label: String,
+    host: String,
+    port: u16,
+    callsign: String,
+    ssid: u8,
+) -> Result<(), String> {
     let addr = format!("{}:{}", host, port);
 
     // Drop any existing connection to the same host:port first (see
@@ -1109,8 +1250,8 @@ pub async fn agw_connect_impl(state: &session::AppState, app_handle: crate::app:
     }
 
     {
-            let mut core = state.core.lock().await;
-    let conns = &mut core.connections;
+        let mut core = state.core.lock().await;
+        let conns = &mut core.connections;
         conns.push(client_arc);
     }
 
@@ -1125,7 +1266,6 @@ pub async fn agw_connect_impl(state: &session::AppState, app_handle: crate::app:
 //   "1:Fm CALL To DEST Via ... <UI pid=xx Len=xx P=1>...\n<info>"
 // Both arms parse the same fields; the two frame-type parsers differ
 // deliberately — see below.
-
 
 // ── AGW frame handlers ───────────────────────────────────
 
@@ -1292,9 +1432,15 @@ async fn on_agw_connected(
             // Degrade gracefully instead of panicking if the board store or the
             // fresh server session failed to initialize — never take down the
             // whole reader task over a missing engine.
-            let Some(s) = server_sessions[free].as_mut() else { return; };
-            let Some(store) = bbs_store.as_mut() else { return; };
-            let Some(engine) = s.bbs.as_mut() else { return; };
+            let Some(s) = server_sessions[free].as_mut() else {
+                return;
+            };
+            let Some(store) = bbs_store.as_mut() else {
+                return;
+            };
+            let Some(engine) = s.bbs.as_mut() else {
+                return;
+            };
             let mut lines = engine.connect_output(store, bbs_cfg);
             // Command list line — the kernel server path appends the
             // prompt to the welcome; the AGW path must too, or the
@@ -1885,15 +2031,9 @@ fn agw_bbs_slot(c: &session::TcpClient, call_from: &str, call_to: &str) -> Optio
 /// outbound connect, allocates a listener tab, and the dialling tab never leaves
 /// AwaitingConnect (Direwolf says connected, we say "Not connected to any
 /// station"). Same class of bug as `client_session_owns` on the KISS path.
-fn agw_outbound_owns(
-    sessions: &[session::Ax25Session],
-    base: &str,
-    ssid: u8,
-) -> bool {
+fn agw_outbound_owns(sessions: &[session::Ax25Session], base: &str, ssid: u8) -> bool {
     sessions.iter().any(|s| {
-        s.state != session::Ax25ConnState::Disconnected
-            && s.remote == base
-            && s.remote_ssid == ssid
+        s.state != session::Ax25ConnState::Disconnected && s.remote == base && s.remote_ssid == ssid
     })
 }
 
@@ -2000,11 +2140,36 @@ async fn agw_bbs_send_line(
 
 /// Initiate AX.25 connection via AGWPE.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn agw_ax25_connect(conn_id: String, tab: usize, remote: String, remote_ssid: u8, via: String, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    agw_ax25_connect_impl(&state, crate::app::Out::tauri(app_handle), conn_id, tab, remote, remote_ssid, via) .await
+pub async fn agw_ax25_connect(
+    conn_id: String,
+    tab: usize,
+    remote: String,
+    remote_ssid: u8,
+    via: String,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    agw_ax25_connect_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        conn_id,
+        tab,
+        remote,
+        remote_ssid,
+        via,
+    )
+    .await
 }
 
-pub async fn agw_ax25_connect_impl(state: &session::AppState, app_handle: crate::app::Out, conn_id: String, tab: usize, remote: String, remote_ssid: u8, via: String) -> Result<(), String> {
+pub async fn agw_ax25_connect_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    conn_id: String,
+    tab: usize,
+    remote: String,
+    remote_ssid: u8,
+    via: String,
+) -> Result<(), String> {
     check_tab(tab)?;
     let client_arc = find_client(state, &conn_id)
         .await
@@ -2079,11 +2244,30 @@ pub async fn agw_ax25_connect_impl(state: &session::AppState, app_handle: crate:
 
 /// Send data on established AGW session.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn agw_send_data(conn_id: String, tab: usize, text: String, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    agw_send_data_impl(&state, crate::app::Out::tauri(app_handle), conn_id, tab, text) .await
+pub async fn agw_send_data(
+    conn_id: String,
+    tab: usize,
+    text: String,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    agw_send_data_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        conn_id,
+        tab,
+        text,
+    )
+    .await
 }
 
-pub async fn agw_send_data_impl(state: &session::AppState, app_handle: crate::app::Out, conn_id: String, tab: usize, text: String) -> Result<(), String> {
+pub async fn agw_send_data_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    conn_id: String,
+    tab: usize,
+    text: String,
+) -> Result<(), String> {
     check_tab(tab)?;
     let client_arc = find_client(state, &conn_id)
         .await
@@ -2096,7 +2280,9 @@ pub async fn agw_send_data_impl(state: &session::AppState, app_handle: crate::ap
         .loc_for_tab(tab)
         .ok_or_else(|| "Not connected".to_string())?;
     let (my_call, my_ssid, remote, remote_ssid) = {
-        let s = c.session_mut(loc).ok_or_else(|| "Not connected".to_string())?;
+        let s = c
+            .session_mut(loc)
+            .ok_or_else(|| "Not connected".to_string())?;
         if s.state != session::Ax25ConnState::Connected {
             return Err("Not connected".to_string());
         }
@@ -2156,11 +2342,21 @@ pub async fn agw_send_data_impl(state: &session::AppState, app_handle: crate::ap
 
 /// Disconnect an AGW session.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn agw_disconnect(conn_id: String, tab: usize, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    agw_disconnect_impl(&state, crate::app::Out::tauri(app_handle), conn_id, tab) .await
+pub async fn agw_disconnect(
+    conn_id: String,
+    tab: usize,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    agw_disconnect_impl(&state, crate::app::Out::tauri(app_handle), conn_id, tab).await
 }
 
-pub async fn agw_disconnect_impl(state: &session::AppState, app_handle: crate::app::Out, conn_id: String, tab: usize) -> Result<(), String> {
+pub async fn agw_disconnect_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    conn_id: String,
+    tab: usize,
+) -> Result<(), String> {
     check_tab(tab)?;
     let client_arc = find_client(state, &conn_id)
         .await
@@ -2175,7 +2371,9 @@ pub async fn agw_disconnect_impl(state: &session::AppState, app_handle: crate::a
         // Kernel-faithful gate: allow disconnect from every established
         // state, including TimerRecovery (an RR retry loop MUST be
         // tear-downable). Only a fully idle session is refused.
-        let s = c.session_mut(loc).ok_or_else(|| "Not connected".to_string())?;
+        let s = c
+            .session_mut(loc)
+            .ok_or_else(|| "Not connected".to_string())?;
         let connected = s.state != session::Ax25ConnState::Disconnected;
         let (my_call, my_ssid) = s.my_identity(&client_call, client_ssid);
         (my_call, my_ssid, s.remote.clone(), s.remote_ssid, connected)
@@ -2241,11 +2439,36 @@ pub async fn agw_disconnect_impl(state: &session::AppState, app_handle: crate::a
 
 /// Send unproto (UI) frame via AGWPE.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn agw_send_ui(conn_id: String, dest: String, dest_ssid: u8, text: String, via: String, state: tauri::State<'_, session::AppState>, _app_handle: tauri::AppHandle) -> Result<(), String> {
-    agw_send_ui_impl(&state, crate::app::Out::tauri(_app_handle), conn_id, dest, dest_ssid, text, via) .await
+pub async fn agw_send_ui(
+    conn_id: String,
+    dest: String,
+    dest_ssid: u8,
+    text: String,
+    via: String,
+    state: tauri::State<'_, session::AppState>,
+    _app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    agw_send_ui_impl(
+        &state,
+        crate::app::Out::tauri(_app_handle),
+        conn_id,
+        dest,
+        dest_ssid,
+        text,
+        via,
+    )
+    .await
 }
 
-pub async fn agw_send_ui_impl(state: &session::AppState, _app_handle: crate::app::Out, conn_id: String, dest: String, dest_ssid: u8, text: String, via: String) -> Result<(), String> {
+pub async fn agw_send_ui_impl(
+    state: &session::AppState,
+    _app_handle: crate::app::Out,
+    conn_id: String,
+    dest: String,
+    dest_ssid: u8,
+    text: String,
+    via: String,
+) -> Result<(), String> {
     let client_arc = find_client(state, &conn_id)
         .await
         .ok_or_else(|| "Connection not found".to_string())?;
@@ -2280,11 +2503,17 @@ pub async fn agw_send_ui_impl(state: &session::AppState, _app_handle: crate::app
 
 /// Disconnect from the AGWPE server.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn agw_disconnect_server(id: String, state: tauri::State<'_, session::AppState>) -> Result<(), String> {
-    agw_disconnect_server_impl(&state, id) .await
+pub async fn agw_disconnect_server(
+    id: String,
+    state: tauri::State<'_, session::AppState>,
+) -> Result<(), String> {
+    agw_disconnect_server_impl(&state, id).await
 }
 
-pub async fn agw_disconnect_server_impl(state: &session::AppState, id: String) -> Result<(), String> {
+pub async fn agw_disconnect_server_impl(
+    state: &session::AppState,
+    id: String,
+) -> Result<(), String> {
     let found = remove_connection_by_id(state, &id).await;
     if found {
         Ok(())
@@ -2359,16 +2588,21 @@ pub struct PbbsAdminView {
 async fn ensure_admin_console<'a>(
     core: &'a mut crate::app::state::AppCore,
     app_handle: &crate::app::Out,
-) -> Result<(&'a mut Option<crate::bbs::BbsSession>, &'a mut Option<crate::bbs::BbsStore>, crate::bbs::BbsConfig, String), String> {
+) -> Result<
+    (
+        &'a mut Option<crate::bbs::BbsSession>,
+        &'a mut Option<crate::bbs::BbsStore>,
+        crate::bbs::BbsConfig,
+        String,
+    ),
+    String,
+> {
     let s = crate::settings::load_settings_or_default();
     let setup = crate::bbs_link::BbsSetup::from_settings(&s, &out_handle(app_handle).data_dir());
     if !setup.enabled {
         return Err("Message board is not enabled — enable it in Settings first".to_string());
     }
-    let idle = core
-        .admin_bbs
-        .as_ref()
-        .is_none_or(|sess| sess.at_command());
+    let idle = core.admin_bbs.as_ref().is_none_or(|sess| sess.at_command());
     if idle || core.admin_bbs_store.is_none() {
         core.admin_bbs_store = setup.store;
     }
@@ -2377,18 +2611,29 @@ async fn ensure_admin_console<'a>(
     } else {
         s.callsign.trim().to_uppercase()
     };
-    Ok((&mut core.admin_bbs, &mut core.admin_bbs_store, setup.cfg, operator))
+    Ok((
+        &mut core.admin_bbs,
+        &mut core.admin_bbs_store,
+        setup.cfg,
+        operator,
+    ))
 }
 
 /// Open the admin console: ALWAYS starts a fresh session (like the Clear
 /// button) — banner + message list + prompt, no preserved state from a
 /// previous visit. Local only, nothing goes over RF.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn pbbs_admin_open(state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<PbbsAdminView, String> {
-    pbbs_admin_open_impl(&state, crate::app::Out::tauri(app_handle)) .await
+pub async fn pbbs_admin_open(
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<PbbsAdminView, String> {
+    pbbs_admin_open_impl(&state, crate::app::Out::tauri(app_handle)).await
 }
 
-pub async fn pbbs_admin_open_impl(state: &session::AppState, app_handle: crate::app::Out) -> Result<PbbsAdminView, String> {
+pub async fn pbbs_admin_open_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+) -> Result<PbbsAdminView, String> {
     pbbs_admin_reset_impl(state, app_handle).await
 }
 
@@ -2396,18 +2641,23 @@ pub async fn pbbs_admin_open_impl(state: &session::AppState, app_handle: crate::
 /// (banner + message list + prompt) — the Clear button's "reload the
 /// main menu" behavior. Local only, nothing goes over RF.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn pbbs_admin_reset(state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<PbbsAdminView, String> {
-    pbbs_admin_reset_impl(&state, crate::app::Out::tauri(app_handle)) .await
+pub async fn pbbs_admin_reset(
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<PbbsAdminView, String> {
+    pbbs_admin_reset_impl(&state, crate::app::Out::tauri(app_handle)).await
 }
 
-pub async fn pbbs_admin_reset_impl(state: &session::AppState, app_handle: crate::app::Out) -> Result<PbbsAdminView, String> {
+pub async fn pbbs_admin_reset_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+) -> Result<PbbsAdminView, String> {
     let mut core = state.core.lock().await;
     // Clear = reload the board from disk: drop the held store so
     // ensure_admin_console loads a fresh snapshot for the new session.
     // (A stale held store would show an outdated banner/message list.)
     core.admin_bbs_store = None;
-    let (admin_bbs, store, cfg, operator) =
-        ensure_admin_console(&mut core, &app_handle).await?;
+    let (admin_bbs, store, cfg, operator) = ensure_admin_console(&mut core, &app_handle).await?;
     *admin_bbs = Some(crate::bbs::BbsSession::new(&operator));
     let sess = admin_bbs.as_ref().unwrap();
     let mut lines = Vec::new();
@@ -2428,14 +2678,21 @@ pub async fn pbbs_admin_reset_impl(state: &session::AppState, app_handle: crate:
 /// means B(ye) — the session resets and the frontend closes the overlay.
 /// Nothing here goes over RF.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn pbbs_admin_send(state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle, line: String) -> Result<PbbsAdminView, String> {
-    pbbs_admin_send_impl(&state, crate::app::Out::tauri(app_handle), line) .await
+pub async fn pbbs_admin_send(
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+    line: String,
+) -> Result<PbbsAdminView, String> {
+    pbbs_admin_send_impl(&state, crate::app::Out::tauri(app_handle), line).await
 }
 
-pub async fn pbbs_admin_send_impl(state: &session::AppState, app_handle: crate::app::Out, line: String) -> Result<PbbsAdminView, String> {
+pub async fn pbbs_admin_send_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    line: String,
+) -> Result<PbbsAdminView, String> {
     let mut core = state.core.lock().await;
-    let (admin_bbs, store, cfg, operator) =
-        ensure_admin_console(&mut core, &app_handle).await?;
+    let (admin_bbs, store, cfg, operator) = ensure_admin_console(&mut core, &app_handle).await?;
     if admin_bbs.is_none() {
         *admin_bbs = Some(crate::bbs::BbsSession::new(&operator));
     }
@@ -2474,7 +2731,7 @@ pub async fn pbbs_admin_send_impl(state: &session::AppState, app_handle: crate::
 /// kernel, so it reflects the same slots the keepalive/recovery timers free.
 #[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn pbbs_users(state: tauri::State<'_, session::AppState>) -> Result<PbbsUsers, String> {
-    pbbs_users_impl(&state) .await
+    pbbs_users_impl(&state).await
 }
 
 pub async fn pbbs_users_impl(state: &session::AppState) -> Result<PbbsUsers, String> {
@@ -2646,11 +2903,42 @@ pub(crate) fn spawn_connect_retry(
 /// Connect to a KISS or AGWPE server. Set `protocol` to your desired mode.
 /// Call this instead of `kiss_connect` or `agw_connect` for new code.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn connect_to_server(id: String, label: String, host: String, port: u16, callsign: String, ssid: u8, protocol: session::Protocol, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    connect_to_server_impl(&state, crate::app::Out::tauri(app_handle), id, label, host, port, callsign, ssid, protocol) .await
+pub async fn connect_to_server(
+    id: String,
+    label: String,
+    host: String,
+    port: u16,
+    callsign: String,
+    ssid: u8,
+    protocol: session::Protocol,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    connect_to_server_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        id,
+        label,
+        host,
+        port,
+        callsign,
+        ssid,
+        protocol,
+    )
+    .await
 }
 
-pub async fn connect_to_server_impl(state: &session::AppState, app_handle: crate::app::Out, id: String, label: String, host: String, port: u16, callsign: String, ssid: u8, protocol: session::Protocol) -> Result<(), String> {
+pub async fn connect_to_server_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    id: String,
+    label: String,
+    host: String,
+    port: u16,
+    callsign: String,
+    ssid: u8,
+    protocol: session::Protocol,
+) -> Result<(), String> {
     match protocol {
         session::Protocol::KISS => {
             kiss_connect_impl(state, app_handle, id, label, host, port, callsign, ssid).await
@@ -2663,11 +2951,36 @@ pub async fn connect_to_server_impl(state: &session::AppState, app_handle: crate
 
 /// Initiate an AX.25 connected-mode session. Dispatches to KISS or AGW based on the connection's protocol.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn connect_session(conn_id: String, tab: usize, remote: String, remote_ssid: u8, via: String, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    connect_session_impl(&state, crate::app::Out::tauri(app_handle), conn_id, tab, remote, remote_ssid, via) .await
+pub async fn connect_session(
+    conn_id: String,
+    tab: usize,
+    remote: String,
+    remote_ssid: u8,
+    via: String,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    connect_session_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        conn_id,
+        tab,
+        remote,
+        remote_ssid,
+        via,
+    )
+    .await
 }
 
-pub async fn connect_session_impl(state: &session::AppState, app_handle: crate::app::Out, conn_id: String, tab: usize, remote: String, remote_ssid: u8, via: String) -> Result<(), String> {
+pub async fn connect_session_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    conn_id: String,
+    tab: usize,
+    remote: String,
+    remote_ssid: u8,
+    via: String,
+) -> Result<(), String> {
     // Check protocol from the stored connection
     let is_agw = connection_is_agw(state, &conn_id).await;
     if is_agw {
@@ -2679,11 +2992,30 @@ pub async fn connect_session_impl(state: &session::AppState, app_handle: crate::
 
 /// Send connected-mode data. Dispatches to I-frame or AGW data based on protocol.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn send_connected_data(conn_id: String, tab: usize, text: String, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    send_connected_data_impl(&state, crate::app::Out::tauri(app_handle), conn_id, tab, text) .await
+pub async fn send_connected_data(
+    conn_id: String,
+    tab: usize,
+    text: String,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    send_connected_data_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        conn_id,
+        tab,
+        text,
+    )
+    .await
 }
 
-pub async fn send_connected_data_impl(state: &session::AppState, app_handle: crate::app::Out, conn_id: String, tab: usize, text: String) -> Result<(), String> {
+pub async fn send_connected_data_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    conn_id: String,
+    tab: usize,
+    text: String,
+) -> Result<(), String> {
     let is_agw = connection_is_agw(state, &conn_id).await;
     if is_agw {
         agw_send_data_impl(state, app_handle, conn_id, tab, text).await
@@ -2694,11 +3026,36 @@ pub async fn send_connected_data_impl(state: &session::AppState, app_handle: cra
 
 /// Send a UI (unproto) frame. Dispatches to KISS or AGW based on protocol.
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub async fn send_ui_frame(conn_id: String, dest: String, dest_ssid: u8, text: String, via: String, state: tauri::State<'_, session::AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    send_ui_frame_impl(&state, crate::app::Out::tauri(app_handle), conn_id, dest, dest_ssid, text, via) .await
+pub async fn send_ui_frame(
+    conn_id: String,
+    dest: String,
+    dest_ssid: u8,
+    text: String,
+    via: String,
+    state: tauri::State<'_, session::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    send_ui_frame_impl(
+        &state,
+        crate::app::Out::tauri(app_handle),
+        conn_id,
+        dest,
+        dest_ssid,
+        text,
+        via,
+    )
+    .await
 }
 
-pub async fn send_ui_frame_impl(state: &session::AppState, app_handle: crate::app::Out, conn_id: String, dest: String, dest_ssid: u8, text: String, via: String) -> Result<(), String> {
+pub async fn send_ui_frame_impl(
+    state: &session::AppState,
+    app_handle: crate::app::Out,
+    conn_id: String,
+    dest: String,
+    dest_ssid: u8,
+    text: String,
+    via: String,
+) -> Result<(), String> {
     let is_agw = connection_is_agw(state, &conn_id).await;
     if is_agw {
         agw_send_ui_impl(state, app_handle, conn_id, dest, dest_ssid, text, via).await

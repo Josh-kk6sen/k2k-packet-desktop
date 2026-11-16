@@ -518,8 +518,14 @@ mod tests {
 
     #[test]
     fn strip_agw_line_prefix_removes_line_number() {
-        assert_eq!(strip_agw_line_prefix("1:Fm COOL To KK6SEN <I> nope"), "Fm COOL To KK6SEN <I> nope");
-        assert_eq!(strip_agw_line_prefix("Fm COOL no prefix"), "Fm COOL no prefix");
+        assert_eq!(
+            strip_agw_line_prefix("1:Fm COOL To KK6SEN <I> nope"),
+            "Fm COOL To KK6SEN <I> nope"
+        );
+        assert_eq!(
+            strip_agw_line_prefix("Fm COOL no prefix"),
+            "Fm COOL no prefix"
+        );
     }
 
     #[test]
@@ -549,10 +555,14 @@ mod tests {
 
     #[test]
     fn agw_radio_header_no_via_and_with_via() {
-        assert_eq!(agw_radio_header("KK6SEN-0", "COOL", "", "UI", "F0(Text)", 4),
-                   "radio: KK6SEN-0 to COOL ctl UI pid=F0(Text) len 4");
-        assert_eq!(agw_radio_header("KK6SEN-0", "COOL", "via KBANN", "I", "F0", 3),
-                   "radio: KK6SEN-0 to COOL via KBANN ctl I pid=F0 len 3");
+        assert_eq!(
+            agw_radio_header("KK6SEN-0", "COOL", "", "UI", "F0(Text)", 4),
+            "radio: KK6SEN-0 to COOL ctl UI pid=F0(Text) len 4"
+        );
+        assert_eq!(
+            agw_radio_header("KK6SEN-0", "COOL", "via KBANN", "I", "F0", 3),
+            "radio: KK6SEN-0 to COOL via KBANN ctl I pid=F0 len 3"
+        );
     }
 
     // ── NET/ROM classification (AGWPE / monitor arm) ──────────────────────
@@ -617,7 +627,8 @@ mod tests {
     fn netrom_pid_with_unknown_shape_falls_back_to_hex() {
         // Correct PID, bytes that are not a NET/ROM header: keep the label,
         // dump hex, and do not invent a decode.
-        let payload = hex("de ad be ef de ad be ef de ad be ef de ad be ef de ad be ef de ad be ef");
+        let payload =
+            hex("de ad be ef de ad be ef de ad be ef de ad be ef de ad be ef de ad be ef");
         let (display, pid_label, _) = format_monitor_payload(&payload, &payload, 0xCF, "UI");
         assert_eq!(pid_label, "CF(NET/ROM)");
         assert!(display.starts_with("[NET/ROM] "), "{display}");
@@ -643,7 +654,10 @@ mod tnc_error_message_tests {
         assert!(m.contains("192.168.1.20:8001"), "{m}");
         assert!(m.contains("KISS"), "{m}");
         assert!(m.contains("8001") && m.contains("8000"), "port hint: {m}");
-        assert!(m.ends_with("(os error 111)"), "detail kept for support: {m}");
+        assert!(
+            m.ends_with("(os error 111)"),
+            "detail kept for support: {m}"
+        );
         assert!(!m.starts_with("Connection failed"), "{m}");
     }
 
@@ -656,9 +670,21 @@ mod tnc_error_message_tests {
 
     #[test]
     fn windows_codes_are_mapped_even_when_kind_is_other() {
-        let m = tnc_connect_message("192.168.1.20:8001", "KISS", ErrorKind::Other, Some(10061), "");
+        let m = tnc_connect_message(
+            "192.168.1.20:8001",
+            "KISS",
+            ErrorKind::Other,
+            Some(10061),
+            "",
+        );
         assert!(m.contains("nothing is listening"), "{m}");
-        let t = tnc_connect_message("192.168.1.20:8001", "KISS", ErrorKind::Other, Some(10060), "");
+        let t = tnc_connect_message(
+            "192.168.1.20:8001",
+            "KISS",
+            ErrorKind::Other,
+            Some(10060),
+            "",
+        );
         assert!(t.starts_with("No answer from"), "{t}");
     }
 
@@ -671,14 +697,26 @@ mod tnc_error_message_tests {
             None,
             "failed to lookup address information: Name or service not known",
         );
-        assert!(m.contains("isn't an address this computer can look up"), "{m}");
+        assert!(
+            m.contains("isn't an address this computer can look up"),
+            "{m}"
+        );
         assert!(m.contains("192.168.1.20"), "gives an example IP: {m}");
     }
 
     #[test]
     fn unknown_failure_still_contextualised() {
-        let m = tnc_connect_message("1.2.3.4:9999", "AGWPE", ErrorKind::Other, Some(4242), "weird");
-        assert!(m.contains("Could not connect to the TNC at 1.2.3.4:9999 (AGWPE)"), "{m}");
+        let m = tnc_connect_message(
+            "1.2.3.4:9999",
+            "AGWPE",
+            ErrorKind::Other,
+            Some(4242),
+            "weird",
+        );
+        assert!(
+            m.contains("Could not connect to the TNC at 1.2.3.4:9999 (AGWPE)"),
+            "{m}"
+        );
         assert!(m.contains("os error 4242"), "{m}");
     }
 }

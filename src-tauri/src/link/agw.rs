@@ -154,7 +154,10 @@ mod tests {
     fn send_frame_buffers_captured_tx() {
         let mut link = AgwLink::new("KK6SEN", 0);
         link.connect("127.0.0.1", 8000).unwrap();
-        link.send_frame(Outgoing { bytes: vec![1, 2, 3] }).unwrap();
+        link.send_frame(Outgoing {
+            bytes: vec![1, 2, 3],
+        })
+        .unwrap();
         assert!(!link.captured_tx.is_empty());
         // First byte is the (LE) port byte; header starts at offset 0.
         assert_eq!(link.captured_tx.len() >= AGW_HEADER_SIZE, true);

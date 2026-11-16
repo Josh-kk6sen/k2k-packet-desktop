@@ -164,7 +164,10 @@ pub fn kiss_unescape(data: &[u8]) -> Vec<u8> {
                 // Invalid escape sequence — log a warning so operators can
                 // notice noise/corruption issues, then drop both bytes.
                 other => {
-                    log::warn!("KISS unescape: invalid escape byte 0x{:02X} — dropping sequence", other);
+                    log::warn!(
+                        "KISS unescape: invalid escape byte 0x{:02X} — dropping sequence",
+                        other
+                    );
                 }
             }
             escaped = false;
@@ -235,7 +238,10 @@ pub async fn send_kiss_command(
     let writer = client.writer()?;
     let frame = build_kiss_command(0, command, param);
     log::info!("kiss: sent cmd 0x{:02X} param={}", command, param);
-    writer.write_all(&frame).await.map_err(|e| format!("KISS cmd write error: {}", e))
+    writer
+        .write_all(&frame)
+        .await
+        .map_err(|e| format!("KISS cmd write error: {}", e))
 }
 
 // ── Transmission ───────────────────────────────────────────────────────────
@@ -258,10 +264,7 @@ pub async fn send_kiss_command(
 /// Returns `Err(String)` if:
 /// - The client has no active TCP stream (`"Not connected to TNC"`).
 /// - The underlying `write_all()` call fails (I/O error from the transport).
-pub async fn send_kiss(
-    client: &mut crate::session::TcpClient,
-    frame: &[u8],
-) -> Result<(), String> {
+pub async fn send_kiss(client: &mut crate::session::TcpClient, frame: &[u8]) -> Result<(), String> {
     // Phase 3: frame through the live `Link` adapter when attached. The
     // adapter derives the exact same KISS frame (build_kiss_frame), and we
     // retrieve the framed bytes from its capture buffer before writing —
@@ -269,14 +272,20 @@ pub async fn send_kiss(
     // don't hold a borrow on `writer` while also touching `client.link`.
     let kiss_frame = if let Some(link) = client.link.as_mut() {
         // Frame through the live adapter, then pull the framed bytes back out.
-        link.send_frame(crate::link::Outgoing { bytes: frame.to_vec() })
-            .map_err(|e| format!("KISS link error: {e}"))?;
-        link.take_last_frame().unwrap_or_else(|| build_kiss_frame(0, frame))
+        link.send_frame(crate::link::Outgoing {
+            bytes: frame.to_vec(),
+        })
+        .map_err(|e| format!("KISS link error: {e}"))?;
+        link.take_last_frame()
+            .unwrap_or_else(|| build_kiss_frame(0, frame))
     } else {
         build_kiss_frame(0, frame)
     };
     let writer = client.writer()?;
-    writer.write_all(&kiss_frame).await.map_err(|e| format!("KISS write error: {e}"))
+    writer
+        .write_all(&kiss_frame)
+        .await
+        .map_err(|e| format!("KISS write error: {e}"))
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -330,8 +339,8 @@ mod tests {
     fn test_build_kiss_frame_format() {
         let data = b"AX25DATA";
         let frame = build_kiss_frame(0, data);
-        assert_eq!(frame[0], FEND);      // Start delimiter
-        assert_eq!(frame[1], CMD_DATA);  // Port 0, data command
+        assert_eq!(frame[0], FEND); // Start delimiter
+        assert_eq!(frame[1], CMD_DATA); // Port 0, data command
         assert_eq!(&frame[2..frame.len() - 1], data); // Payload (no special bytes)
         assert_eq!(frame[frame.len() - 1], FEND); // End delimiter
     }

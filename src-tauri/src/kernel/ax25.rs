@@ -16,31 +16,43 @@
 //   S-frame:  [N(R) 3b] [P/F] [SS 2b] [0 1]   — bits 0-1 = 01
 //   U-frame:  [MMM 3b]  [P/F] [MMM 3b] [1 1]  — bits 0-1 = 11
 
-pub const SABM_P: u8 = 0x3F;  // Set Asynchronous Balanced Mode, P-bit set (initiate connect)
-pub const UA: u8 = 0x73;      // Unnumbered Acknowledgment, F-bit set (accept connect)
-pub const DISC: u8 = 0x53;    // Disconnect, P-bit set (request disconnect)
-pub const UI_P: u8 = 0x13;    // Unnumbered Information, P-bit set (connectionless data)
+pub const SABM_P: u8 = 0x3F; // Set Asynchronous Balanced Mode, P-bit set (initiate connect)
+pub const UA: u8 = 0x73; // Unnumbered Acknowledgment, F-bit set (accept connect)
+pub const DISC: u8 = 0x53; // Disconnect, P-bit set (request disconnect)
+pub const UI_P: u8 = 0x13; // Unnumbered Information, P-bit set (connectionless data)
 
 // P/F-cleared control values for comparing parsed frames. The state
 // machine masks bit 4 (P/F) then compares — these named forms keep the
 // magic numbers (0x2F/0x43/0x63/0x0F) in one place.
-pub const SABM_CTL: u8 = SABM_P & 0xEF;  // SABM with P/F ignored
-pub const UA_CTL: u8 = UA & 0xEF;        // UA with P/F ignored
-pub const DISC_CTL: u8 = DISC & 0xEF;    // DISC with P/F ignored
-pub const DM_CTL: u8 = 0x0F;             // DM with P/F ignored
+pub const SABM_CTL: u8 = SABM_P & 0xEF; // SABM with P/F ignored
+pub const UA_CTL: u8 = UA & 0xEF; // UA with P/F ignored
+pub const DISC_CTL: u8 = DISC & 0xEF; // DISC with P/F ignored
+pub const DM_CTL: u8 = 0x0F; // DM with P/F ignored
 
 /// True when the control byte is an I-frame (bit 0 clear).
-pub fn is_iframe_ctl(c: u8) -> bool { (c & 0x01) == 0 }
+pub fn is_iframe_ctl(c: u8) -> bool {
+    (c & 0x01) == 0
+}
 /// True when the control byte is a UI frame (0x03 or 0x13).
-pub fn is_ui_ctl(c: u8) -> bool { c == 0x03 || c == 0x13 }
+pub fn is_ui_ctl(c: u8) -> bool {
+    c == 0x03 || c == 0x13
+}
 /// True when the control byte is SABM/SABME with the P/F bit ignored.
-pub fn is_sabm_ctl(c: u8) -> bool { (c & 0xEF) == SABM_CTL }
+pub fn is_sabm_ctl(c: u8) -> bool {
+    (c & 0xEF) == SABM_CTL
+}
 /// True when the control byte is UA with the P/F bit ignored.
-pub fn is_ua_ctl(c: u8) -> bool { (c & 0xEF) == UA_CTL }
+pub fn is_ua_ctl(c: u8) -> bool {
+    (c & 0xEF) == UA_CTL
+}
 /// True when the control byte is DISC with the P/F bit ignored.
-pub fn is_disc_ctl(c: u8) -> bool { (c & 0xEF) == DISC_CTL }
+pub fn is_disc_ctl(c: u8) -> bool {
+    (c & 0xEF) == DISC_CTL
+}
 /// True when the control byte is DM with the P/F bit ignored.
-pub fn is_dm_ctl(c: u8) -> bool { (c & 0xEF) == DM_CTL }
+pub fn is_dm_ctl(c: u8) -> bool {
+    (c & 0xEF) == DM_CTL
+}
 
 // ── Address Encoding ─────────────────────────────────────
 //
@@ -88,8 +100,10 @@ fn encode_callsign(call: &str, ssid: u8, c_bit: bool, last: bool) -> Vec<u8> {
 ///   2. Source (ALWAYS second, C-bit = !command)
 ///   3. Digipeaters (zero or more, last one has extension bit = 1)
 pub fn encode_ax25_header(
-    dest: &str, dest_ssid: u8,
-    src: &str, src_ssid: u8,
+    dest: &str,
+    dest_ssid: u8,
+    src: &str,
+    src_ssid: u8,
     command: bool,
     digis: &[String],
 ) -> Vec<u8> {
@@ -162,7 +176,13 @@ pub fn decode_address_field(data: &[u8]) -> Option<DecodedAddress> {
     let ssid = (ssid_byte >> 1) & 0x0F;
     let c_or_h = (ssid_byte & 0x80) != 0;
     let e_bit = (ssid_byte & 0x01) != 0;
-    Some(DecodedAddress { callsign, ssid, c_bit: c_or_h, h_bit: c_or_h, e_bit })
+    Some(DecodedAddress {
+        callsign,
+        ssid,
+        c_bit: c_or_h,
+        h_bit: c_or_h,
+        e_bit,
+    })
 }
 
 /// Format a digipeater callsign with * marker if the H-bit (has-been-repeated) is set.
@@ -173,12 +193,19 @@ pub fn format_digi(call: &str, ssid: u8, h_bit: bool) -> String {
     } else {
         call.to_string()
     };
-    if h_bit { format!("{}*", base) } else { base }
+    if h_bit {
+        format!("{}*", base)
+    } else {
+        base
+    }
 }
 
 /// Format a digipeater list for display (`format_digi` over each entry).
 pub fn fmt_digi_labels(digis: &[(String, u8, bool)]) -> Vec<String> {
-    digis.iter().map(|(c, s, h)| format_digi(c, *s, *h)).collect()
+    digis
+        .iter()
+        .map(|(c, s, h)| format_digi(c, *s, *h))
+        .collect()
 }
 
 /// Format a callsign/SSID pair for display, omitting "-0" for readability.
@@ -193,7 +220,9 @@ pub fn fmt_call(call: &str, ssid: u8) -> String {
 
 /// Format the digipeater via path string like "via KBANN KBANN*"
 pub fn fmt_via(digis: &[(String, u8, bool)]) -> String {
-    if digis.is_empty() { return String::new(); }
+    if digis.is_empty() {
+        return String::new();
+    }
     let parts: Vec<String> = fmt_digi_labels(digis);
     format!("via {}", parts.join(" "))
 }
@@ -221,11 +250,15 @@ pub fn format_via(digis: &[String]) -> String {
 
 /// Decode a NET/ROM 7-byte node callsign (same shifted-left format as AX.25 addresses).
 pub fn decode_netrom_node(data: &[u8]) -> Option<(String, u8)> {
-    if data.len() < 7 { return None; }
+    if data.len() < 7 {
+        return None;
+    }
     let mut chars = String::with_capacity(6);
     for i in 0..6 {
         let c = (data[i] >> 1) & 0x7F;
-        if c >= 32 && c <= 126 { chars.push(c as u8 as char); }
+        if c >= 32 && c <= 126 {
+            chars.push(c as u8 as char);
+        }
     }
     let callsign = chars.trim().to_string();
     let ssid = (data[6] >> 1) & 0x0F;
@@ -278,9 +311,10 @@ pub fn parse_ax25_frame(data: &[u8]) -> Option<ParsedAx25Frame> {
     let src_ssid = addresses[1].ssid;
 
     // Digipeaters with H-bit info (H-bit = C/R bit for non-first addresses)
-    let digis: Vec<(String, u8, bool)> = addresses[2..].iter().map(|a| {
-        (a.callsign.clone(), a.ssid, a.h_bit)
-    }).collect();
+    let digis: Vec<(String, u8, bool)> = addresses[2..]
+        .iter()
+        .map(|a| (a.callsign.clone(), a.ssid, a.h_bit))
+        .collect();
 
     if offset >= data.len() {
         return None;
@@ -314,7 +348,17 @@ pub fn parse_ax25_frame(data: &[u8]) -> Option<ParsedAx25Frame> {
     };
 
     let src_c_bit = addresses[1].c_bit;
-    Some(ParsedAx25Frame { dest, dest_ssid, src, src_ssid, digis, control, pid, info, src_c_bit })
+    Some(ParsedAx25Frame {
+        dest,
+        dest_ssid,
+        src,
+        src_ssid,
+        digis,
+        control,
+        pid,
+        info,
+        src_c_bit,
+    })
 }
 
 // ── AX.25 Frame Builders ─────────────────────────────────
@@ -323,9 +367,12 @@ pub fn parse_ax25_frame(data: &[u8]) -> Option<ParsedAx25Frame> {
 ///
 /// This is the lowest-level frame builder — use build_sabm, build_disc, etc. instead.
 pub fn build_ax25_frame(
-    dest: &str, dest_ssid: u8,
-    src: &str, src_ssid: u8,
-    control: u8, pid: u8,
+    dest: &str,
+    dest_ssid: u8,
+    src: &str,
+    src_ssid: u8,
+    control: u8,
+    pid: u8,
     info: &[u8],
     digis: &[String],
     command: bool,
@@ -344,7 +391,17 @@ pub fn build_ax25_frame(
 
 /// Build a SABM (Set Asynchronous Balanced Mode) frame — initiates a connection.
 pub fn build_sabm(dest: &str, dest_ssid: u8, src: &str, src_ssid: u8, digis: &[String]) -> Vec<u8> {
-    build_ax25_frame(dest, dest_ssid, src, src_ssid, SABM_P, 0xF0, &[], digis, true)
+    build_ax25_frame(
+        dest,
+        dest_ssid,
+        src,
+        src_ssid,
+        SABM_P,
+        0xF0,
+        &[],
+        digis,
+        true,
+    )
 }
 
 /// Build a DISC (Disconnect) frame — requests orderly connection teardown.
@@ -357,9 +414,12 @@ pub fn build_disc(dest: &str, dest_ssid: u8, src: &str, src_ssid: u8, digis: &[S
 /// N(S) = send sequence number (0-7, modulo 8)
 /// N(R) = receive sequence number (piggybacked ACK)
 pub fn build_iframe(
-    dest: &str, dest_ssid: u8,
-    src: &str, src_ssid: u8,
-    ns: u8, nr: u8,
+    dest: &str,
+    dest_ssid: u8,
+    src: &str,
+    src_ssid: u8,
+    ns: u8,
+    nr: u8,
     info: &[u8],
     digis: &[String],
 ) -> Vec<u8> {
@@ -368,17 +428,23 @@ pub fn build_iframe(
     // Setting P=1 on every I-frame causes the remote to send RR+F per frame,
     // wasting airtime. Linpac/BPQ send I-frames with P=0 (see working Direwolf log).
     let control = (nr << 5) | (ns << 1);
-    build_ax25_frame(dest, dest_ssid, src, src_ssid, control, 0xF0, info, digis, true)
+    build_ax25_frame(
+        dest, dest_ssid, src, src_ssid, control, 0xF0, info, digis, true,
+    )
 }
 
 /// Build a UI frame (Unnumbered Information) — connectionless data (e.g., APRS, beacons).
 pub fn build_ui(
-    dest: &str, dest_ssid: u8,
-    src: &str, src_ssid: u8,
+    dest: &str,
+    dest_ssid: u8,
+    src: &str,
+    src_ssid: u8,
     info: &[u8],
     digis: &[String],
 ) -> Vec<u8> {
-    build_ax25_frame(dest, dest_ssid, src, src_ssid, UI_P, 0xF0, info, digis, true)
+    build_ax25_frame(
+        dest, dest_ssid, src, src_ssid, UI_P, 0xF0, info, digis, true,
+    )
 }
 
 // ── Display Helpers ──────────────────────────────────────
@@ -389,15 +455,17 @@ pub fn build_ui(
 /// Falls back to '.' per-byte for bytes that aren't valid UTF-8 continuation.
 pub fn info_to_string(info: &[u8]) -> String {
     String::from_utf8(info.to_vec()).unwrap_or_else(|_| {
-        info.iter().map(|&b| {
-            if b >= 32 && b <= 126 {
-                b as char
-            } else if b == b'\r' || b == b'\n' || b == b'\t' {
-                b as char
-            } else {
-                '·'
-            }
-        }).collect()
+        info.iter()
+            .map(|&b| {
+                if b >= 32 && b <= 126 {
+                    b as char
+                } else if b == b'\r' || b == b'\n' || b == b'\t' {
+                    b as char
+                } else {
+                    '·'
+                }
+            })
+            .collect()
     })
 }
 
@@ -433,7 +501,11 @@ pub fn normalize_linpac_text(text: &str) -> Vec<u8> {
 /// Format raw AX.25 bytes as a hex dump string (space-separated, e.g. "C0 01 02 ...").
 /// Used for the Raw KISS Display mode and debugging.
 pub fn fmt_raw_kiss(payload: &[u8]) -> String {
-    payload.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ")
+    payload
+        .iter()
+        .map(|b| format!("{:02X}", b))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Build a linpac-style radio header line like:
@@ -514,7 +586,7 @@ pub fn classify_frame_type(control: u8) -> String {
             0x05 => format!("RNR{}{}", nr, pf),
             0x09 => format!("REJ{}{}", nr, pf),
             0x0D => format!("SREJ{}{}", nr, pf),
-            _    => format!("S{}{}", nr, pf),
+            _ => format!("S{}{}", nr, pf),
         }
     } else {
         // U-frame: bits 0-1 = 11
@@ -529,7 +601,7 @@ pub fn classify_frame_type(control: u8) -> String {
             0x87 => format!("FRMR{}", pf),
             0x6F => format!("SABME{}", pf),
             0xAF => format!("XID{}", pf),
-            _    => format!("?{}", pf),
+            _ => format!("?{}", pf),
         }
     }
 }
@@ -552,13 +624,19 @@ mod tests {
         let dest = decode_address_field(&hdr[0..7]).unwrap();
         let src = decode_address_field(&hdr[7..14]).unwrap();
         assert!(dest.c_bit, "dest of a command must carry the C bit");
-        assert!(!src.c_bit, "src of a command carries 0 — src_c_bit=false means command");
+        assert!(
+            !src.c_bit,
+            "src of a command carries 0 — src_c_bit=false means command"
+        );
         // Response frame: dest C=0, src C=1.
         let hdr2 = encode_ax25_header("KK6ABC", 1, "KK6SEN", 0, false, &["KBANN".to_string()]);
         let dest2 = decode_address_field(&hdr2[0..7]).unwrap();
         let src2 = decode_address_field(&hdr2[7..14]).unwrap();
         assert!(!dest2.c_bit, "dest of a response must NOT carry the C bit");
-        assert!(src2.c_bit, "src of a response carries 1 — src_c_bit=true means response");
+        assert!(
+            src2.c_bit,
+            "src of a response carries 1 — src_c_bit=true means response"
+        );
     }
 
     #[test]
@@ -580,7 +658,7 @@ mod tests {
         assert_eq!(result[0], b'K' << 1);
         assert_eq!(result[1], b'B' << 1);
         assert_eq!(result[2], b' ' << 1); // padded
-        // SSID=7, C/R=1, last=1: C/R=1, RR=11, SSSS=0111, EXT=1 = 1110 1111 = 0xEF
+                                          // SSID=7, C/R=1, last=1: C/R=1, RR=11, SSSS=0111, EXT=1 = 1110 1111 = 0xEF
         assert_eq!(result[6], 0xEF);
     }
 
@@ -599,9 +677,7 @@ mod tests {
         assert_eq!(header.len(), 14); // 2 × 7 bytes
 
         // Decode it back
-        let frame = parse_ax25_frame(
-            &[&header[..], &[0x03u8, 0xF0], b"HELLO"].concat()
-        ).unwrap();
+        let frame = parse_ax25_frame(&[&header[..], &[0x03u8, 0xF0], b"HELLO"].concat()).unwrap();
         assert_eq!(frame.dest, "KK6SEN");
         assert_eq!(frame.dest_ssid, 0);
         assert_eq!(frame.src, "KB7XYZ");
@@ -618,12 +694,12 @@ mod tests {
 
         // Check extension bits (bit 0 = 0x01): dest=0, src=0, WIDE1-1=0, WIDE2=1
         // Check C/R bits (bit 7 = 0x80): dest=1 (command), src=0 (!command), digis=0
-        assert_eq!(header[6] & 0x01, 0);   // dest EXT = 0 (more follow)
-        assert_eq!(header[13] & 0x01, 0);  // src EXT = 0 (more follow)
-        assert_eq!(header[20] & 0x01, 0);  // WIDE1-1 EXT = 0 (more follow)
-        assert_eq!(header[27] & 0x01, 1);  // WIDE2 EXT = 1 (last)
-        assert_eq!(header[6] & 0x80, 0x80);  // dest C/R = 1 (command)
-        assert_eq!(header[13] & 0x80, 0);    // src C/R = 0 (!command)
+        assert_eq!(header[6] & 0x01, 0); // dest EXT = 0 (more follow)
+        assert_eq!(header[13] & 0x01, 0); // src EXT = 0 (more follow)
+        assert_eq!(header[20] & 0x01, 0); // WIDE1-1 EXT = 0 (more follow)
+        assert_eq!(header[27] & 0x01, 1); // WIDE2 EXT = 1 (last)
+        assert_eq!(header[6] & 0x80, 0x80); // dest C/R = 1 (command)
+        assert_eq!(header[13] & 0x80, 0); // src C/R = 0 (!command)
     }
 
     #[test]
@@ -651,29 +727,32 @@ mod tests {
 
     #[test]
     fn test_classify_frame_type() {
-        assert_eq!(classify_frame_type(0x00), "I00-");   // I-frame, N(S)=0, N(R)=0
-        assert_eq!(classify_frame_type(0x03), "UI-");    // UI, P/F clear
-        assert_eq!(classify_frame_type(0x13), "UI+");    // UI with P/F set
-        assert_eq!(classify_frame_type(0x3F), "SABM+");  // SABM with P/F set
-        assert_eq!(classify_frame_type(0x73), "UA+");    // UA with F-bit set
-        assert_eq!(classify_frame_type(0x63), "UA-");    // UA without F-bit
-        assert_eq!(classify_frame_type(0x53), "DISC+");  // DISC with P-bit set
-        assert_eq!(classify_frame_type(0x43), "DISC-");  // DISC without P-bit
-        assert_eq!(classify_frame_type(0x01), "RR0-");   // RR, N(R)=0
-        assert_eq!(classify_frame_type(0x11), "RR0+");   // RR with P/F, N(R)=0
-        assert_eq!(classify_frame_type(0x05), "RNR0-");  // RNR
-        assert_eq!(classify_frame_type(0x09), "REJ0-");  // REJ
-        // I-frame with N(S)=4, N(R)=0, P=1: 0x10 | (0<<5) | (4<<1) = 0x18
-        assert_eq!(classify_frame_type(0x18), "I40+");   // +/- convention
-        // FRMR and XID
+        assert_eq!(classify_frame_type(0x00), "I00-"); // I-frame, N(S)=0, N(R)=0
+        assert_eq!(classify_frame_type(0x03), "UI-"); // UI, P/F clear
+        assert_eq!(classify_frame_type(0x13), "UI+"); // UI with P/F set
+        assert_eq!(classify_frame_type(0x3F), "SABM+"); // SABM with P/F set
+        assert_eq!(classify_frame_type(0x73), "UA+"); // UA with F-bit set
+        assert_eq!(classify_frame_type(0x63), "UA-"); // UA without F-bit
+        assert_eq!(classify_frame_type(0x53), "DISC+"); // DISC with P-bit set
+        assert_eq!(classify_frame_type(0x43), "DISC-"); // DISC without P-bit
+        assert_eq!(classify_frame_type(0x01), "RR0-"); // RR, N(R)=0
+        assert_eq!(classify_frame_type(0x11), "RR0+"); // RR with P/F, N(R)=0
+        assert_eq!(classify_frame_type(0x05), "RNR0-"); // RNR
+        assert_eq!(classify_frame_type(0x09), "REJ0-"); // REJ
+                                                        // I-frame with N(S)=4, N(R)=0, P=1: 0x10 | (0<<5) | (4<<1) = 0x18
+        assert_eq!(classify_frame_type(0x18), "I40+"); // +/- convention
+                                                       // FRMR and XID
         assert_eq!(classify_frame_type(0x87), "FRMR-");
         assert_eq!(classify_frame_type(0x97), "FRMR+");
-        assert_eq!(classify_frame_type(0xAF), "XID-");  // XID, P/F clear (0xAF bit 0x10 = 0)
+        assert_eq!(classify_frame_type(0xAF), "XID-"); // XID, P/F clear (0xAF bit 0x10 = 0)
     }
 
     #[test]
     fn test_build_radio_header() {
-        let digis = vec![("WIDE1".to_string(), 1, false), ("WIDE2".to_string(), 0, true)];
+        let digis = vec![
+            ("WIDE1".to_string(), 1, false),
+            ("WIDE2".to_string(), 0, true),
+        ];
         let hdr = build_radio_header("KK6SEN", "BEACON", &digis, "UI+", 0x13, 0xF0, 12);
         assert!(hdr.contains("fm KK6SEN to BEACON"));
         assert!(hdr.contains("via WIDE1-1 WIDE2*"));
@@ -719,7 +798,10 @@ mod tests {
 
     #[test]
     fn test_fmt_via() {
-        let digis = vec![("WIDE1".to_string(), 1, false), ("WIDE2".to_string(), 0, true)];
+        let digis = vec![
+            ("WIDE1".to_string(), 1, false),
+            ("WIDE2".to_string(), 0, true),
+        ];
         assert_eq!(fmt_via(&digis), "via WIDE1-1 WIDE2*");
         assert_eq!(fmt_via(&[]), "");
     }
@@ -741,4 +823,3 @@ mod tests {
         assert_eq!(normalize_linpac_text("a\r\n"), b"a\r".to_vec());
     }
 }
-

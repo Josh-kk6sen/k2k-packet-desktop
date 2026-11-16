@@ -87,8 +87,8 @@ fn parse_routing_broadcast(info: &[u8]) -> Option<(String, String)> {
         // Destination node address (shifted format, same as AX.25 addresses).
         if let Some((node_call, ssid)) = decode_netrom_node(&entry[0..7]) {
             // Validate that the callsign looks reasonable (not binary garbage)
-            let call_valid = !node_call.is_empty()
-                && node_call.chars().all(|c| c.is_ascii_alphanumeric());
+            let call_valid =
+                !node_call.is_empty() && node_call.chars().all(|c| c.is_ascii_alphanumeric());
             if !call_valid {
                 pos += 1; // Skip forward and try again
                 continue;
@@ -325,10 +325,26 @@ mod tests {
         let rows: Vec<&str> = display.lines().collect();
         assert_eq!(rows[0], "NET/ROM Routing: BERRY");
         assert_eq!(rows.len(), 7); // header + 6 entries
-        assert!(display.contains("N6BSS-4   #DIGI        N6BSS-4"), "{}", display);
-        assert!(display.contains("KI6ZHD-5  SCLARA       KI6ZHD-5"), "{}", display);
-        assert!(display.contains("KF6DQU-9  BANNER       KF6DQU-9"), "{}", display);
-        assert!(display.contains("KM6LYW-4  COOL         KM6LYW-4  70"), "{}", display);
+        assert!(
+            display.contains("N6BSS-4   #DIGI        N6BSS-4"),
+            "{}",
+            display
+        );
+        assert!(
+            display.contains("KI6ZHD-5  SCLARA       KI6ZHD-5"),
+            "{}",
+            display
+        );
+        assert!(
+            display.contains("KF6DQU-9  BANNER       KF6DQU-9"),
+            "{}",
+            display
+        );
+        assert!(
+            display.contains("KM6LYW-4  COOL         KM6LYW-4  70"),
+            "{}",
+            display
+        );
     }
 
     /// Real capture: announcement-only broadcast (0xFF + name, no entries).

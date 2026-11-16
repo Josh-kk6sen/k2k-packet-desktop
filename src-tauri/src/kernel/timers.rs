@@ -209,8 +209,14 @@ mod tests {
         let mut bank = TimerBank::new();
         let now = Instant::now();
         bank.schedule(id(TimerKind::T2), now); // due exactly at now
-        bank.schedule(TimerID::new(TimerKind::T2, SessionLoc::Tab(1)), now + Duration::from_secs(60));
-        bank.schedule(TimerID::new(TimerKind::Beacon, SessionLoc::Tab(0)), now + Duration::from_millis(1));
+        bank.schedule(
+            TimerID::new(TimerKind::T2, SessionLoc::Tab(1)),
+            now + Duration::from_secs(60),
+        );
+        bank.schedule(
+            TimerID::new(TimerKind::Beacon, SessionLoc::Tab(0)),
+            now + Duration::from_millis(1),
+        );
         let mut due = bank.take_due(now + Duration::from_millis(1));
         due.sort_by_key(|d| d.loc.index());
         assert_eq!(due.len(), 2);
@@ -225,7 +231,11 @@ mod tests {
         let b = TimerID::new(TimerKind::T2, SessionLoc::Tab(2));
         bank.schedule(a, now + Duration::from_secs(1));
         bank.schedule(b, now + Duration::from_secs(1));
-        assert_eq!(bank.len(), 2, "same kind on different sessions are distinct");
+        assert_eq!(
+            bank.len(),
+            2,
+            "same kind on different sessions are distinct"
+        );
     }
 
     #[test]

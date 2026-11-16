@@ -1123,11 +1123,13 @@ pub fn spawn_recovery_timer(
                         if role == SessionRole::Server {
                             if let SessionLoc::Server(i) = loc {
                                 if let Some(s) = c.server_sessions.get_mut(i) {
-                                    if let Some(h) = s.as_mut().and_then(|x| x.keepalive_handle.take())
+                                    if let Some(h) =
+                                        s.as_mut().and_then(|x| x.keepalive_handle.take())
                                     {
                                         h.abort();
                                     }
-                                    if let Some(h) = s.as_mut().and_then(|x| x.retry_handle.take()) {
+                                    if let Some(h) = s.as_mut().and_then(|x| x.retry_handle.take())
+                                    {
                                         h.abort();
                                     }
                                 }
@@ -1501,18 +1503,8 @@ async fn handle_ax25_frame(
     };
     if let Some(kind) = route {
         route_server_frame(
-            app_handle,
-            client_arc,
-            kind,
-            dest,
-            dest_ssid,
-            src,
-            src_ssid,
-            digis,
-            control,
-            info,
-            frame_type,
-            src_c_bit,
+            app_handle, client_arc, kind, dest, dest_ssid, src, src_ssid, digis, control, info,
+            frame_type, src_c_bit,
         )
         .await;
         return;
@@ -1574,9 +1566,9 @@ fn chat_target(
 /// AwaitingConnect window right after we send SABM — which is exactly when the
 /// remote's UA arrives.
 fn client_session_owns(sessions: &[Ax25Session], src: &str, src_ssid: u8) -> bool {
-    sessions
-        .iter()
-        .any(|s| s.remote == src && s.remote_ssid == src_ssid && s.state != Ax25ConnState::Disconnected)
+    sessions.iter().any(|s| {
+        s.remote == src && s.remote_ssid == src_ssid && s.state != Ax25ConnState::Disconnected
+    })
 }
 
 /// First C-tab with nothing on it — no live session and no chat listener
@@ -1586,17 +1578,15 @@ fn free_chat_tab(c: &TcpClient) -> Option<usize> {
 }
 
 /// Pure tab picker (unit-testable without a live `TcpClient`).
-fn pick_free_chat_tab(
-    sessions: &[Ax25Session],
-    pool: &[Option<Ax25Session>],
-) -> Option<usize> {
+fn pick_free_chat_tab(sessions: &[Ax25Session], pool: &[Option<Ax25Session>]) -> Option<usize> {
     let bound: Vec<usize> = pool
         .iter()
         .flatten()
         .filter(|s| s.is_chat())
         .map(|s| s.tab)
         .collect();
-    (0..sessions.len()).find(|t| sessions[*t].state == Ax25ConnState::Disconnected && !bound.contains(t))
+    (0..sessions.len())
+        .find(|t| sessions[*t].state == Ax25ConnState::Disconnected && !bound.contains(t))
 }
 
 /// Refuse an inbound chat connect with a readable reason.
@@ -1618,7 +1608,17 @@ async fn refuse_chat_busy(
         .iter()
         .map(|(d, s, _)| ax25::fmt_call(d, *s))
         .collect();
-    let ua = ax25::build_ax25_frame(src, src_ssid, dest, dest_ssid, ax25::UA, 0xF0, &[], &via, false);
+    let ua = ax25::build_ax25_frame(
+        src,
+        src_ssid,
+        dest,
+        dest_ssid,
+        ax25::UA,
+        0xF0,
+        &[],
+        &via,
+        false,
+    );
     emit_tx_frame(app_handle.as_ref(), &ua);
     let _ = kiss::send_kiss(c, &ua).await;
 
@@ -1631,8 +1631,17 @@ async fn refuse_chat_busy(
     // the disconnect lands. No session exists to supervise the retransmission,
     // so this is deliberately fire-and-forget.
     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-    let disc =
-        ax25::build_ax25_frame(src, src_ssid, dest, dest_ssid, ax25::DISC, 0xF0, &[], &via, false);
+    let disc = ax25::build_ax25_frame(
+        src,
+        src_ssid,
+        dest,
+        dest_ssid,
+        ax25::DISC,
+        0xF0,
+        &[],
+        &via,
+        false,
+    );
     emit_tx_frame(app_handle.as_ref(), &disc);
     let _ = kiss::send_kiss(c, &disc).await;
 }
@@ -1747,7 +1756,11 @@ async fn route_server_frame(
         if capped {
             crate::commands::log_line(&format!(
                 "{}: connect from {}-{} refused (all connections busy)",
-                if kind == ServerKind::Chat { "Direct chat" } else { "Message board" },
+                if kind == ServerKind::Chat {
+                    "Direct chat"
+                } else {
+                    "Message board"
+                },
                 src,
                 src_ssid
             ));
@@ -1880,7 +1893,11 @@ async fn route_server_frame(
     // the link down — log it (matches old bbs_link behavior).
     crate::commands::log_line(&format!(
         "{}: traffic from {}-{} with no live session (link torn down?)",
-        if kind == ServerKind::Chat { "Direct chat" } else { "Message board" },
+        if kind == ServerKind::Chat {
+            "Direct chat"
+        } else {
+            "Message board"
+        },
         src,
         src_ssid
     ));
@@ -2011,7 +2028,9 @@ pub(crate) fn run_engine_lines(
     // and the session keeps making progress.
     const MAX_RX_BUFFER: usize = 8192;
     if session.rx_buffer.len() > MAX_RX_BUFFER {
-        session.rx_buffer = session.rx_buffer.split_off(session.rx_buffer.len() - MAX_RX_BUFFER);
+        session.rx_buffer = session
+            .rx_buffer
+            .split_off(session.rx_buffer.len() - MAX_RX_BUFFER);
     }
     let mut out_lines: Vec<String> = Vec::new();
     let mut hangup = false;
@@ -2435,7 +2454,8 @@ impl DeferredOps {
                         .await;
                 }
                 Effect::DrainOutput(loc) => {
-                    send_one_output_chunk(c, client_arc, loc, app_handle, my_callsign, my_ssid).await;
+                    send_one_output_chunk(c, client_arc, loc, app_handle, my_callsign, my_ssid)
+                        .await;
                 }
                 Effect::Emit(event, payload) => {
                     let _ = app_handle.emit(event, payload);
@@ -3340,7 +3360,15 @@ fn dispatch_state(
             session.handle_awaiting_disconnect(ctx, deferred, app_handle, callsign, ssid);
         }
         Ax25ConnState::Disconnected => {
-            session.handle_disconnected(ctx, deferred, callsign, ssid, active_remotes, dm_sent, bbs_ctx);
+            session.handle_disconnected(
+                ctx,
+                deferred,
+                callsign,
+                ssid,
+                active_remotes,
+                dm_sent,
+                bbs_ctx,
+            );
         }
     }
 }
@@ -4171,7 +4199,11 @@ mod tests {
             s.remote_ssid = i as u8;
             pool[free] = Some(s);
         }
-        assert_eq!(pool.iter().flatten().count(), n, "4 distinct users each get a slot");
+        assert_eq!(
+            pool.iter().flatten().count(),
+            n,
+            "4 distinct users each get a slot"
+        );
 
         // 5th distinct user: no existing slot AND pool is full → must be
         // refused (the router sends DM; here we assert the refusal decision).
@@ -4188,7 +4220,11 @@ mod tests {
             .collect();
         slots.sort_unstable();
         slots.dedup();
-        assert_eq!(slots.len(), n, "one session per distinct user, all distinct slots");
+        assert_eq!(
+            slots.len(),
+            n,
+            "one session per distinct user, all distinct slots"
+        );
     }
 
     /// Stale board user: the recovery T1 loop DM's and — post-fix — frees
@@ -4203,26 +4239,31 @@ mod tests {
         // Real loopback TCP pair for the required write half (no RF).
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let (a, b) = tokio::join!(
-            tokio::net::TcpStream::connect(addr),
-            async {
-                let (s, _) = listener.accept().await.unwrap();
-                s
-            },
-        );
+        let (a, b) = tokio::join!(tokio::net::TcpStream::connect(addr), async {
+            let (s, _) = listener.accept().await.unwrap();
+            s
+        },);
         let (_read, write) = a.unwrap().into_split();
         let _keep_connected = b;
 
         let mut c = TcpClient::new(
-            "test".into(), "board".into(), "127.0.0.1".into(), 8001,
-            Protocol::KISS, write, "KK6SEN".into(), 0, &out, KissTiming::default(),
+            "test".into(),
+            "board".into(),
+            "127.0.0.1".into(),
+            8001,
+            Protocol::KISS,
+            write,
+            "KK6SEN".into(),
+            0,
+            &out,
+            KissTiming::default(),
         );
         c.bbs_enabled = true;
         c.bbs_callsign = "KK6SEN".to_string();
         c.bbs_ssid = 1;
         c.info.connected = true; // recovery_delay_ms requires connected
-        c.n2_max = 3;            // small so the DM branch is reached quickly
-        c.t1_ms = 5;             // tiny so the T1 sleep returns fast
+        c.n2_max = 3; // small so the DM branch is reached quickly
+        c.t1_ms = 5; // tiny so the T1 sleep returns fast
 
         // A stale board user already in TimerRecovery with n2count == n2_max:
         // the next recovery pass must DM AND free the slot.
@@ -4249,7 +4290,11 @@ mod tests {
             g.server_sessions[0].is_none(),
             "recovery DM frees the server slot"
         );
-        assert_eq!(g.server_sessions.iter().flatten().count(), 0, "slot returned to pool");
+        assert_eq!(
+            g.server_sessions.iter().flatten().count(),
+            0,
+            "slot returned to pool"
+        );
     }
 
     /// A C-tab (permanent tab session) is never freed by the recovery
@@ -4396,6 +4441,9 @@ mod tests {
             client(Ax25ConnState::Connected),
             client(Ax25ConnState::Connected),
         ];
-        assert_eq!(pick_free_chat_tab(&all_busy, &[None, None, None, None]), None);
+        assert_eq!(
+            pick_free_chat_tab(&all_busy, &[None, None, None, None]),
+            None
+        );
     }
 }

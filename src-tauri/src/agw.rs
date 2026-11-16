@@ -135,7 +135,11 @@ fn build_via_payload(digis: &[String]) -> Vec<u8> {
     for digi in digis {
         let digi_bytes = digi.as_bytes();
         for i in 0..CALLSIGN_FIELD_SIZE {
-            via_data.push(if i < digi_bytes.len() { digi_bytes[i] } else { 0x00 });
+            via_data.push(if i < digi_bytes.len() {
+                digi_bytes[i]
+            } else {
+                0x00
+            });
         }
     }
     via_data
@@ -248,12 +252,26 @@ pub fn build_frame(
 /// Registers a local callsign and optional SSID with the AGWPE
 /// engine so it can be used for outgoing connections.
 pub fn build_register(callsign: &str, ssid: u8) -> Vec<u8> {
-    build_header(0, CMD_REGISTER, 0x00, &fmt_header_callsign(callsign, ssid), "", 0)
+    build_header(
+        0,
+        CMD_REGISTER,
+        0x00,
+        &fmt_header_callsign(callsign, ssid),
+        "",
+        0,
+    )
 }
 
 /// Build a Connect (`'C'`) frame to initiate an AX.25 connection.
 pub fn build_connect(port: u8, my_call: &str, my_ssid: u8, dest: &str, dest_ssid: u8) -> Vec<u8> {
-    build_header(port, CMD_CONNECT, 0xF0, &fmt_header_callsign(my_call, my_ssid), &fmt_header_callsign(dest, dest_ssid), 0)
+    build_header(
+        port,
+        CMD_CONNECT,
+        0xF0,
+        &fmt_header_callsign(my_call, my_ssid),
+        &fmt_header_callsign(dest, dest_ssid),
+        0,
+    )
 }
 
 /// Build a Connect-Via (`'v'`) frame — connect through digipeaters.
@@ -269,8 +287,11 @@ pub fn build_connect_via(
     digis: &[String],
 ) -> Vec<u8> {
     build_frame(
-        port, CMD_CONNECT_VIA, 0xF0,
-        &fmt_header_callsign(my_call, my_ssid), &fmt_header_callsign(dest, dest_ssid),
+        port,
+        CMD_CONNECT_VIA,
+        0xF0,
+        &fmt_header_callsign(my_call, my_ssid),
+        &fmt_header_callsign(dest, dest_ssid),
         &build_via_payload(digis),
     )
 }
@@ -294,8 +315,11 @@ pub fn build_unproto_via(
     via_data.extend_from_slice(data);
 
     build_frame(
-        port, CMD_UNPROTO_VIA, 0xF0,
-        &fmt_header_callsign(my_call, my_ssid), &fmt_header_callsign(dest, dest_ssid),
+        port,
+        CMD_UNPROTO_VIA,
+        0xF0,
+        &fmt_header_callsign(my_call, my_ssid),
+        &fmt_header_callsign(dest, dest_ssid),
         &via_data,
     )
 }
@@ -310,7 +334,14 @@ pub fn build_data(
     dest_ssid: u8,
     data: &[u8],
 ) -> Vec<u8> {
-    build_frame(port, CMD_DATA, 0xF0, &fmt_header_callsign(my_call, my_ssid), &fmt_header_callsign(dest, dest_ssid), data)
+    build_frame(
+        port,
+        CMD_DATA,
+        0xF0,
+        &fmt_header_callsign(my_call, my_ssid),
+        &fmt_header_callsign(dest, dest_ssid),
+        data,
+    )
 }
 
 /// Build a Disconnect (`'d'`) frame to terminate an AX.25 connection.
@@ -321,7 +352,14 @@ pub fn build_disconnect(
     dest: &str,
     dest_ssid: u8,
 ) -> Vec<u8> {
-    build_header(port, CMD_DISCONNECT, 0xF0, &fmt_header_callsign(my_call, my_ssid), &fmt_header_callsign(dest, dest_ssid), 0)
+    build_header(
+        port,
+        CMD_DISCONNECT,
+        0xF0,
+        &fmt_header_callsign(my_call, my_ssid),
+        &fmt_header_callsign(dest, dest_ssid),
+        0,
+    )
 }
 
 /// Build a Send Unproto (`'M'`) frame to send a UI frame (beacon /
@@ -334,7 +372,14 @@ pub fn build_unproto(
     dest_ssid: u8,
     data: &[u8],
 ) -> Vec<u8> {
-    build_frame(port, CMD_UNPROTO, 0xF0, &fmt_header_callsign(my_call, my_ssid), &fmt_header_callsign(dest, dest_ssid), data)
+    build_frame(
+        port,
+        CMD_UNPROTO,
+        0xF0,
+        &fmt_header_callsign(my_call, my_ssid),
+        &fmt_header_callsign(dest, dest_ssid),
+        data,
+    )
 }
 
 /// Build a Toggle Monitoring (`'m'`) frame — header only, no payload.
@@ -367,12 +412,7 @@ pub fn parse_frame(data: &[u8]) -> Option<AgwFrame> {
     let call_to = parse_callsign_field(&data[18..28]);
 
     // DataLen (uint32 LE at offset 28)
-    let data_len = u32::from_le_bytes([
-        data[28],
-        data[29],
-        data[30],
-        data[31],
-    ]);
+    let data_len = u32::from_le_bytes([data[28], data[29], data[30], data[31]]);
 
     // Extract data payload
     let total_needed = AGW_HEADER_SIZE + data_len as usize;
@@ -441,7 +481,7 @@ mod tests {
         // Should be "KK6SEN-4\0" padded
         assert!(call_from.starts_with(b"KK6SEN-4"));
         assert_eq!(call_from[8], 0); // null terminator at position 8
-        // CallTo at offset 18-27
+                                     // CallTo at offset 18-27
         let call_to = &header[18..28];
         assert!(call_to.starts_with(b"N7XYZ"));
         assert_eq!(call_to[5], 0); // null terminator at position 5
@@ -454,7 +494,12 @@ mod tests {
         assert_eq!(frame.len(), AGW_HEADER_SIZE + data.len());
 
         let data_len_bytes = &frame[28..32];
-        let parsed_len = u32::from_le_bytes([data_len_bytes[0], data_len_bytes[1], data_len_bytes[2], data_len_bytes[3]]);
+        let parsed_len = u32::from_le_bytes([
+            data_len_bytes[0],
+            data_len_bytes[1],
+            data_len_bytes[2],
+            data_len_bytes[3],
+        ]);
         assert_eq!(parsed_len, data.len() as u32);
     }
 

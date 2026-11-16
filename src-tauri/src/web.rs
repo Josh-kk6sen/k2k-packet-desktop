@@ -193,7 +193,11 @@ async fn ws_loop(mut socket: WebSocket, ctx: Ctx) {
         "events": ctx.sink.snapshot(),
         "connections": connections_json(&ctx.state).await,
     });
-    if socket.send(Message::Text(snapshot.to_string().into())).await.is_err() {
+    if socket
+        .send(Message::Text(snapshot.to_string().into()))
+        .await
+        .is_err()
+    {
         return;
     }
 
@@ -307,7 +311,12 @@ async fn log_list() -> Response {
     for n in names {
         html.push_str(&format!("<a href=\"/api/logs/{n}\">{n}</a>"));
     }
-    (StatusCode::OK, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response()
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        html,
+    )
+        .into_response()
 }
 
 async fn log_file(Path(name): Path<String>) -> Response {
@@ -376,9 +385,16 @@ fn val(v: impl serde::Serialize) -> Value {
 async fn invoke(AxState(ctx): AxState<Ctx>, body: String) -> Response {
     let req: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
-        Err(e) => return Json(json!({ "ok": false, "error": format!("Bad request: {e}") })).into_response(),
+        Err(e) => {
+            return Json(json!({ "ok": false, "error": format!("Bad request: {e}") }))
+                .into_response()
+        }
     };
-    let cmd = req.get("cmd").and_then(|c| c.as_str()).unwrap_or_default().to_string();
+    let cmd = req
+        .get("cmd")
+        .and_then(|c| c.as_str())
+        .unwrap_or_default()
+        .to_string();
     let args = normalize_args(req.get("args").unwrap_or(&Value::Null));
 
     let res = dispatch(&ctx, &cmd, &args).await;
@@ -394,90 +410,205 @@ async fn dispatch(ctx: &Ctx, cmd: &str, a: &Value) -> Result<Value, String> {
     let r: Result<Value, String> = match cmd {
         // ── connection control ──
         "kiss_connect" => crate::commands::kiss_connect_impl(
-            st, out.clone(), arg(a, "id")?, arg(a, "label")?, arg(a, "host")?, arg(a, "port")?,
-            arg(a, "callsign")?, arg(a, "ssid")?,
-        ).await.map(|_| Value::Null),
-        "kiss_disconnect" => crate::commands::kiss_disconnect_impl(st, arg(a, "id")?).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "id")?,
+            arg(a, "label")?,
+            arg(a, "host")?,
+            arg(a, "port")?,
+            arg(a, "callsign")?,
+            arg(a, "ssid")?,
+        )
+        .await
+        .map(|_| Value::Null),
+        "kiss_disconnect" => crate::commands::kiss_disconnect_impl(st, arg(a, "id")?)
+            .await
+            .map(|_| Value::Null),
         "agw_connect" => crate::commands::agw_connect_impl(
-            st, out.clone(), arg(a, "id")?, arg(a, "label")?, arg(a, "host")?, arg(a, "port")?,
-            arg(a, "callsign")?, arg(a, "ssid")?,
-        ).await.map(|_| Value::Null),
-        "agw_disconnect_server" => {
-            crate::commands::agw_disconnect_server_impl(st, arg(a, "id")?).await.map(|_| Value::Null)
-        }
+            st,
+            out.clone(),
+            arg(a, "id")?,
+            arg(a, "label")?,
+            arg(a, "host")?,
+            arg(a, "port")?,
+            arg(a, "callsign")?,
+            arg(a, "ssid")?,
+        )
+        .await
+        .map(|_| Value::Null),
+        "agw_disconnect_server" => crate::commands::agw_disconnect_server_impl(st, arg(a, "id")?)
+            .await
+            .map(|_| Value::Null),
         "connect_to_server" => crate::commands::connect_to_server_impl(
-            st, out.clone(), arg(a, "id")?, arg(a, "label")?, arg(a, "host")?, arg(a, "port")?,
-            arg(a, "callsign")?, arg(a, "ssid")?, arg(a, "protocol")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "id")?,
+            arg(a, "label")?,
+            arg(a, "host")?,
+            arg(a, "port")?,
+            arg(a, "callsign")?,
+            arg(a, "ssid")?,
+            arg(a, "protocol")?,
+        )
+        .await
+        .map(|_| Value::Null),
 
         // ── connected-mode sessions ──
         "ax25_connect" => crate::commands::ax25_connect_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "tab")?, arg(a, "remote")?,
-            arg(a, "remote_ssid")?, arg(a, "via")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "tab")?,
+            arg(a, "remote")?,
+            arg(a, "remote_ssid")?,
+            arg(a, "via")?,
+        )
+        .await
+        .map(|_| Value::Null),
         "agw_ax25_connect" => crate::commands::agw_ax25_connect_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "tab")?, arg(a, "remote")?,
-            arg(a, "remote_ssid")?, arg(a, "via")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "tab")?,
+            arg(a, "remote")?,
+            arg(a, "remote_ssid")?,
+            arg(a, "via")?,
+        )
+        .await
+        .map(|_| Value::Null),
         "connect_session" => crate::commands::connect_session_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "tab")?, arg(a, "remote")?,
-            arg(a, "remote_ssid")?, arg(a, "via")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "tab")?,
+            arg(a, "remote")?,
+            arg(a, "remote_ssid")?,
+            arg(a, "via")?,
+        )
+        .await
+        .map(|_| Value::Null),
         "ax25_send_iframe" => crate::commands::ax25_send_iframe_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "tab")?, arg(a, "text")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "tab")?,
+            arg(a, "text")?,
+        )
+        .await
+        .map(|_| Value::Null),
         "agw_send_data" => crate::commands::agw_send_data_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "tab")?, arg(a, "text")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "tab")?,
+            arg(a, "text")?,
+        )
+        .await
+        .map(|_| Value::Null),
         "send_connected_data" => crate::commands::send_connected_data_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "tab")?, arg(a, "text")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "tab")?,
+            arg(a, "text")?,
+        )
+        .await
+        .map(|_| Value::Null),
         "ax25_disconnect" => crate::commands::ax25_disconnect_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "tab")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "tab")?,
+        )
+        .await
+        .map(|_| Value::Null),
         "agw_disconnect" => crate::commands::agw_disconnect_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "tab")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "tab")?,
+        )
+        .await
+        .map(|_| Value::Null),
 
         // ── unproto (UI) frames ──
         "ax25_send_ui" => crate::commands::ax25_send_ui_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "dest")?, arg(a, "dest_ssid")?,
-            arg(a, "text")?, arg(a, "via")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "dest")?,
+            arg(a, "dest_ssid")?,
+            arg(a, "text")?,
+            arg(a, "via")?,
+        )
+        .await
+        .map(|_| Value::Null),
         "agw_send_ui" => crate::commands::agw_send_ui_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "dest")?, arg(a, "dest_ssid")?,
-            arg(a, "text")?, arg(a, "via")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "dest")?,
+            arg(a, "dest_ssid")?,
+            arg(a, "text")?,
+            arg(a, "via")?,
+        )
+        .await
+        .map(|_| Value::Null),
         "send_ui_frame" => crate::commands::send_ui_frame_impl(
-            st, out.clone(), arg(a, "conn_id")?, arg(a, "dest")?, arg(a, "dest_ssid")?,
-            arg(a, "text")?, arg(a, "via")?,
-        ).await.map(|_| Value::Null),
+            st,
+            out.clone(),
+            arg(a, "conn_id")?,
+            arg(a, "dest")?,
+            arg(a, "dest_ssid")?,
+            arg(a, "text")?,
+            arg(a, "via")?,
+        )
+        .await
+        .map(|_| Value::Null),
 
         // ── message board admin console ──
-        "pbbs_admin_open" => crate::commands::pbbs_admin_open_impl(st, out.clone()).await.map(val),
-        "pbbs_admin_reset" => crate::commands::pbbs_admin_reset_impl(st, out.clone()).await.map(val),
-        "pbbs_admin_send" => crate::commands::pbbs_admin_send_impl(st, out.clone(), arg(a, "line")?).await.map(val),
+        "pbbs_admin_open" => crate::commands::pbbs_admin_open_impl(st, out.clone())
+            .await
+            .map(val),
+        "pbbs_admin_reset" => crate::commands::pbbs_admin_reset_impl(st, out.clone())
+            .await
+            .map(val),
+        "pbbs_admin_send" => {
+            crate::commands::pbbs_admin_send_impl(st, out.clone(), arg(a, "line")?)
+                .await
+                .map(val)
+        }
         "pbbs_users" => crate::commands::pbbs_users_impl(st).await.map(val),
 
         // ── settings / history / logs ──
-        "save_settings" => crate::settings::save_settings(arg(a, "settings")?).await.map(|_| Value::Null),
+        "save_settings" => crate::settings::save_settings(arg(a, "settings")?)
+            .await
+            .map(|_| Value::Null),
         "load_settings" => crate::settings::load_settings().await.map(val),
         "reset_settings" => crate::settings::reset_settings().await.map(|_| Value::Null),
         // No window in this mode: report success without letting a browser
         // write window geometry that belongs to the desktop session.
         "save_window_state" => Ok(Value::Null),
-        "save_history" => crate::history::save_history(
-            arg(a, "key")?, arg(a, "value")?, arg(a, "max")?,
-        ).map(|_| Value::Null),
+        "save_history" => {
+            crate::history::save_history(arg(a, "key")?, arg(a, "value")?, arg(a, "max")?)
+                .map(|_| Value::Null)
+        }
         "load_history" => crate::history::load_history(arg(a, "key")?).map(val),
-        "remove_history" => crate::history::remove_history(arg(a, "key")?, arg(a, "value")?).map(|_| Value::Null),
+        "remove_history" => {
+            crate::history::remove_history(arg(a, "key")?, arg(a, "value")?).map(|_| Value::Null)
+        }
         "clear_history" => crate::history::clear_history(arg(a, "key")?).map(|_| Value::Null),
-        "append_log" => crate::commands::append_log(arg(a, "kind")?, arg(a, "text")?).map(|_| Value::Null),
+        "append_log" => {
+            crate::commands::append_log(arg(a, "kind")?, arg(a, "text")?).map(|_| Value::Null)
+        }
         // The browser cannot open a folder on the server; the client opens
         // /api/logs instead (see src/transport.js).
         "open_log_dir" => Err(format!(
             "Logs live on the server: {}",
-            crate::LOG_DIR.get().map(|d| d.display().to_string()).unwrap_or_default()
+            crate::LOG_DIR
+                .get()
+                .map(|d| d.display().to_string())
+                .unwrap_or_default()
         )),
 
         // ── info ──

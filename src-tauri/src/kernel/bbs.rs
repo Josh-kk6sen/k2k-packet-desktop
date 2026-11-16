@@ -49,7 +49,10 @@ pub struct BbsData {
 /// Python default when pbbs_data.json is missing: next_id starts at 1.
 impl Default for BbsData {
     fn default() -> Self {
-        BbsData { messages: Vec::new(), next_id: 1 }
+        BbsData {
+            messages: Vec::new(),
+            next_id: 1,
+        }
     }
 }
 
@@ -157,17 +160,26 @@ impl BbsStore {
     }
 }
 
-fn load_json<T: serde::de::DeserializeOwned + Default + Serialize>(path: &std::path::Path, default: T) -> T {
+fn load_json<T: serde::de::DeserializeOwned + Default + Serialize>(
+    path: &std::path::Path,
+    default: T,
+) -> T {
     match std::fs::read_to_string(path) {
         Ok(text) => match serde_json::from_str(&text) {
             Ok(v) => v,
             Err(_) => {
-                eprintln!("*** Warning: {} is corrupted.", path.file_name().unwrap_or_default().to_string_lossy());
+                eprintln!(
+                    "*** Warning: {} is corrupted.",
+                    path.file_name().unwrap_or_default().to_string_lossy()
+                );
                 let bak = PathBuf::from(format!("{}.bak", path.display()));
                 match std::fs::read_to_string(&bak) {
                     Ok(btext) => match serde_json::from_str(&btext) {
                         Ok(v) => {
-                            eprintln!("*** Restoring from backup: {}", bak.file_name().unwrap_or_default().to_string_lossy());
+                            eprintln!(
+                                "*** Restoring from backup: {}",
+                                bak.file_name().unwrap_or_default().to_string_lossy()
+                            );
                             // Write the recovered data straight to the main file —
                             // NOT via save_json: its .bak-copy-first step would copy
                             // the still-corrupted main file over the only good
@@ -228,11 +240,20 @@ pub fn now_str() -> String {
 pub enum BbsInputMode {
     Command,
     /// After S/SB/SP — waiting for the SUBJECT line.
-    Subject { kind: char },
+    Subject {
+        kind: char,
+    },
     /// After subject — collecting body lines until "/EX".
-    Body { kind: char, dest: String, subj: String, mid: u32 },
+    Body {
+        kind: char,
+        dest: String,
+        subj: String,
+        mid: u32,
+    },
     /// After "K n" — waiting for y/N confirmation.
-    DeleteConfirm { id: u32 },
+    DeleteConfirm {
+        id: u32,
+    },
     /// After "KM" — waiting for y/N confirmation.
     KillMineConfirm,
 }
@@ -251,10 +272,16 @@ pub struct BbsReply {
 /// tell the user.
 fn save_reply(store: &mut BbsStore, ok: &str) -> BbsReply {
     match store.save_data() {
-        Ok(()) => BbsReply { lines: vec![ok.to_string()], hangup: false },
+        Ok(()) => BbsReply {
+            lines: vec![ok.to_string()],
+            hangup: false,
+        },
         Err(e) => {
             crate::commands::log_line(&format!("Message board: data save failed: {e}"));
-            BbsReply { lines: vec!["*** SAVE FAILED (see Log viewer)".to_string()], hangup: false }
+            BbsReply {
+                lines: vec!["*** SAVE FAILED (see Log viewer)".to_string()],
+                hangup: false,
+            }
         }
     }
 }
@@ -341,13 +368,23 @@ impl BbsSession {
                 let dest = self.take_pending_dest();
                 let mid = store.data.next_id;
                 store.data.next_id += 1;
-                self.mode = BbsInputMode::Body { kind, dest, subj, mid };
+                self.mode = BbsInputMode::Body {
+                    kind,
+                    dest,
+                    subj,
+                    mid,
+                };
                 BbsReply {
                     lines: vec![format!("\nENTER MESSAGE {}--END WITH /EX", mid)],
                     hangup: false,
                 }
             }
-            BbsInputMode::Body { kind, dest, subj, mid } => {
+            BbsInputMode::Body {
+                kind,
+                dest,
+                subj,
+                mid,
+            } => {
                 if line.trim().eq_ignore_ascii_case("/EX") {
                     // Python appends whatever body was collected (possibly empty)
                     let (kind, dest, subj, mid) = (kind.clone(), dest.clone(), subj.clone(), *mid);
@@ -355,7 +392,11 @@ impl BbsSession {
                     let body = std::mem::take(&mut self.pending_body);
                     store.data.messages.push(BbsMessage {
                         id: mid,
-                        st: if kind == 'B' { "B".to_string() } else { "P".to_string() },
+                        st: if kind == 'B' {
+                            "B".to_string()
+                        } else {
+                            "P".to_string()
+                        },
                         to: dest,
                         from: self.user.clone(),
                         date: now_str(),
@@ -389,7 +430,10 @@ impl BbsSession {
             BbsInputMode::KillMineConfirm => {
                 self.mode = BbsInputMode::Command;
                 if line.trim().eq_ignore_ascii_case("Y") {
-                    store.data.messages.retain(|m| !(m.to == self.user && m.read));
+                    store
+                        .data
+                        .messages
+                        .retain(|m| !(m.to == self.user && m.read));
                     save_reply(store, "Read messages killed.")
                 } else {
                     BbsReply::default()
@@ -410,33 +454,58 @@ impl BbsSession {
         let user = self.user.clone();
 
         match cmd.as_str() {
-            "B" => BbsReply { lines: out, hangup: true },
+            "B" => BbsReply {
+                lines: out,
+                hangup: true,
+            },
             "J" => {
                 let mut heard: Vec<(&String, &String)> = store.heard.iter().collect();
                 heard.sort_by(|a, b| b.1.cmp(a.1));
                 for (call, t) in heard {
                     out.push(format!("{:<10} {}", call, t));
                 }
-                BbsReply { lines: out, hangup: false }
+                BbsReply {
+                    lines: out,
+                    hangup: false,
+                }
             }
             "L" => {
                 if arg.is_none() {
                     list_messages_lines(&mut out, &store.data, cfg, &user, None, false, None, None);
-                    BbsReply { lines: out, hangup: false }
+                    BbsReply {
+                        lines: out,
+                        hangup: false,
+                    }
                 } else if (arg.as_deref() == Some("<") || arg.as_deref() == Some(">"))
                     && parts.len() > 2
                 {
-                    let dir = if arg.as_deref() == Some("<") { Some("FROM") } else { Some("TO") };
+                    let dir = if arg.as_deref() == Some("<") {
+                        Some("FROM")
+                    } else {
+                        Some("TO")
+                    };
                     list_messages_lines(
-                        &mut out, &store.data, cfg, &user, None, false,
-                        Some(&parts[2].to_uppercase()), dir,
+                        &mut out,
+                        &store.data,
+                        cfg,
+                        &user,
+                        None,
+                        false,
+                        Some(&parts[2].to_uppercase()),
+                        dir,
                     );
-                    BbsReply { lines: out, hangup: false }
+                    BbsReply {
+                        lines: out,
+                        hangup: false,
+                    }
                 } else {
                     // Python falls through to "Not a valid command" — a bare
                     // "L call" (no direction) or "L <" without a callsign is
                     // a silent no-op otherwise, which looks dead over RF.
-                    BbsReply { lines: vec!["Not a valid command".to_string()], hangup: false }
+                    BbsReply {
+                        lines: vec!["Not a valid command".to_string()],
+                        hangup: false,
+                    }
                 }
             }
             "LL" => {
@@ -444,15 +513,33 @@ impl BbsSession {
                 // "Not a valid command", not silence.
                 match arg.and_then(|a| a.parse::<usize>().ok()) {
                     Some(a) => {
-                        list_messages_lines(&mut out, &store.data, cfg, &user, Some(a), false, None, None);
-                        BbsReply { lines: out, hangup: false }
+                        list_messages_lines(
+                            &mut out,
+                            &store.data,
+                            cfg,
+                            &user,
+                            Some(a),
+                            false,
+                            None,
+                            None,
+                        );
+                        BbsReply {
+                            lines: out,
+                            hangup: false,
+                        }
                     }
-                    None => BbsReply { lines: vec!["Not a valid command".to_string()], hangup: false },
+                    None => BbsReply {
+                        lines: vec!["Not a valid command".to_string()],
+                        hangup: false,
+                    },
                 }
             }
             "LM" => {
                 list_messages_lines(&mut out, &store.data, cfg, &user, None, true, None, None);
-                BbsReply { lines: out, hangup: false }
+                BbsReply {
+                    lines: out,
+                    hangup: false,
+                }
             }
             "R" => {
                 // Python: R requires an arg — bare "R" is "Not a valid command".
@@ -472,7 +559,12 @@ impl BbsSession {
                                 ));
                                 if m.to == user {
                                     // find_mut pattern: re-lookup to mutate
-                                    if let Some(mm) = store.data.messages.iter_mut().find(|m| m.id.to_string() == a) {
+                                    if let Some(mm) = store
+                                        .data
+                                        .messages
+                                        .iter_mut()
+                                        .find(|m| m.id.to_string() == a)
+                                    {
                                         mm.read = true;
                                     }
                                     if let Err(e) = store.save_data() {
@@ -483,9 +575,15 @@ impl BbsSession {
                                 }
                             }
                         }
-                        BbsReply { lines: out, hangup: false }
+                        BbsReply {
+                            lines: out,
+                            hangup: false,
+                        }
                     }
-                    None => BbsReply { lines: vec!["Not a valid command".to_string()], hangup: false },
+                    None => BbsReply {
+                        lines: vec!["Not a valid command".to_string()],
+                        hangup: false,
+                    },
                 }
             }
             "RM" => {
@@ -512,7 +610,10 @@ impl BbsSession {
                         ));
                     }
                 }
-                BbsReply { lines: out, hangup: false }
+                BbsReply {
+                    lines: out,
+                    hangup: false,
+                }
             }
             "S" | "SB" | "SP" => {
                 // Python: dest = arg or "ALL"; then subject line is requested.
@@ -522,13 +623,17 @@ impl BbsSession {
                 let dest = arg.unwrap_or_else(|| "ALL".to_string());
                 self.pending_dest = dest;
                 self.mode = BbsInputMode::Subject { kind };
-                BbsReply { lines: vec!["SUBJECT: ".to_string()], hangup: false }
+                BbsReply {
+                    lines: vec!["SUBJECT: ".to_string()],
+                    hangup: false,
+                }
             }
             "K" => {
                 // Python: K requires an arg — bare "K" is "Not a valid command".
                 match arg {
                     Some(a) => {
-                        if let Some(m) = store.data.messages.iter().find(|m| m.id.to_string() == a) {
+                        if let Some(m) = store.data.messages.iter().find(|m| m.id.to_string() == a)
+                        {
                             if m.from == user || m.to == user || is_sysop(&user, cfg) {
                                 if let Some(id) = a.parse::<u32>().ok() {
                                     self.mode = BbsInputMode::DeleteConfirm { id };
@@ -536,24 +641,41 @@ impl BbsSession {
                                 }
                             }
                         }
-                        BbsReply { lines: out, hangup: false }
+                        BbsReply {
+                            lines: out,
+                            hangup: false,
+                        }
                     }
-                    None => BbsReply { lines: vec!["Not a valid command".to_string()], hangup: false },
+                    None => BbsReply {
+                        lines: vec!["Not a valid command".to_string()],
+                        hangup: false,
+                    },
                 }
             }
             "KM" => {
                 self.mode = BbsInputMode::KillMineConfirm;
-                BbsReply { lines: vec!["Delete ALL your read messages? (y/N): ".to_string()], hangup: false }
+                BbsReply {
+                    lines: vec!["Delete ALL your read messages? (y/N): ".to_string()],
+                    hangup: false,
+                }
             }
             "P" => {
                 // Python: P requires sysop AND an arg — anything else is
                 // "Not a valid command".
                 if !is_sysop(&user, cfg) {
-                    return BbsReply { lines: vec!["Not a valid command".to_string()], hangup: false };
+                    return BbsReply {
+                        lines: vec!["Not a valid command".to_string()],
+                        hangup: false,
+                    };
                 }
                 match arg {
                     Some(a) => {
-                        if let Some(m) = store.data.messages.iter_mut().find(|m| m.id.to_string() == a) {
+                        if let Some(m) = store
+                            .data
+                            .messages
+                            .iter_mut()
+                            .find(|m| m.id.to_string() == a)
+                        {
                             m.pinned = !m.pinned;
                             if let Err(e) = store.save_data() {
                                 crate::commands::log_line(&format!(
@@ -562,13 +684,22 @@ impl BbsSession {
                             }
                             out.push("Toggled Pin.".to_string());
                         }
-                        BbsReply { lines: out, hangup: false }
+                        BbsReply {
+                            lines: out,
+                            hangup: false,
+                        }
                     }
-                    None => BbsReply { lines: vec!["Not a valid command".to_string()], hangup: false },
+                    None => BbsReply {
+                        lines: vec!["Not a valid command".to_string()],
+                        hangup: false,
+                    },
                 }
             }
             "H" | "HELP" => {
-                out.push(format!("--- {} K2K Packet Message Board Help ---", cfg.node_name));
+                out.push(format!(
+                    "--- {} K2K Packet Message Board Help ---",
+                    cfg.node_name
+                ));
                 out.push("B(ye)         K2K PACKET MESSAGE BOARD WILL DISCONNECT".to_string());
                 out.push("J(heard)      CALLSIGNS WITH DAYSTAMP".to_string());
                 out.push("K(ill) n      DELETE MESSAGE NUMBER n".to_string());
@@ -585,11 +716,19 @@ impl BbsSession {
                 if is_sysop(&user, cfg) {
                     out.push(String::new());
                     out.push("SYSOP COMMANDS:".to_string());
-                    out.push("P n           PIN MESSAGE n (Forces to top of list with '!')".to_string());
+                    out.push(
+                        "P n           PIN MESSAGE n (Forces to top of list with '!')".to_string(),
+                    );
                 }
-                BbsReply { lines: out, hangup: false }
+                BbsReply {
+                    lines: out,
+                    hangup: false,
+                }
             }
-            _ => BbsReply { lines: vec!["Not a valid command".to_string()], hangup: false },
+            _ => BbsReply {
+                lines: vec!["Not a valid command".to_string()],
+                hangup: false,
+            },
         }
     }
 }
@@ -670,7 +809,11 @@ fn list_messages_lines(
         "MSG#", "ST", "SIZE", "TO", "FROM", "DATE", "SUBJECT"
     ));
     for m in msgs {
-        let mut st = if m.pinned { "!".to_string() } else { m.st.clone() };
+        let mut st = if m.pinned {
+            "!".to_string()
+        } else {
+            m.st.clone()
+        };
         if m.to == user && !m.read {
             st.push('N');
         }
@@ -680,7 +823,13 @@ fn list_messages_lines(
         let subj26: String = m.subject.chars().take(26).collect();
         out.push(format!(
             "{:<5} {:<2} {:<6} {:<8} {:<8} {:<18} {}",
-            m.id, st, m.body.len(), to8, from8, date18, subj26
+            m.id,
+            st,
+            m.body.len(),
+            to8,
+            from8,
+            date18,
+            subj26
         ));
     }
     // No trailing blank line — pack_bbs_lines keeps empty elements, so an
@@ -704,7 +853,8 @@ mod tests {
     }
 
     fn tmp_store(name: &str) -> BbsStore {
-        let dir = std::env::temp_dir().join(format!("k2k_bbs_test_{}_{}", name, std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("k2k_bbs_test_{}_{}", name, std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::create_dir_all(&dir);
         BbsStore::load(&dir)
@@ -838,7 +988,11 @@ mod tests {
         assert_eq!(r4.lines, vec!["MESSAGE SAVED to # 3".to_string()]);
 
         let ids: Vec<u32> = store.data.messages.iter().map(|m| m.id).collect();
-        assert_eq!(ids, vec![1, 2, 3], "message ids must increment, never reuse");
+        assert_eq!(
+            ids,
+            vec![1, 2, 3],
+            "message ids must increment, never reuse"
+        );
         assert_eq!(store.data.next_id, 4);
     }
 
@@ -902,7 +1056,10 @@ mod tests {
         let mut sess2 = BbsSession::new("W6ABC");
         let r = sess2.handle_line("R 1", &mut store, &test_config());
         assert!(r.lines[0].starts_with("MSG#1 08/01/26 12:00:00 FROM W6ABC TO KK6SEN"));
-        assert!(!store.data.messages[0].read, "reading own sent message must not mark read");
+        assert!(
+            !store.data.messages[0].read,
+            "reading own sent message must not mark read"
+        );
         // The addressee reading marks it read
         let mut sess = BbsSession::new("KK6SEN");
         sess.handle_line("R 1", &mut store, &test_config());
@@ -918,7 +1075,10 @@ mod tests {
         let r = sess.handle_line("L", &mut store, &test_config());
         let joined = r.lines.join("\n");
         assert!(!joined.contains("Hello"), "private mail leaked: {joined}");
-        assert!(joined.contains("Net tonight"), "public bulletin missing: {joined}");
+        assert!(
+            joined.contains("Net tonight"),
+            "public bulletin missing: {joined}"
+        );
         // sysop sees everything
         let mut sysop = BbsSession::new("KK6SEN");
         let r = sysop.handle_line("L", &mut store, &test_config());
@@ -1036,7 +1196,10 @@ mod tests {
     fn prompt_shown_for_user_and_sysop() {
         let cfg = test_config(); // sysops: [KK6SEN]
         let sess = BbsSession::new("KK6SEN");
-        assert_eq!(sess.prompt(&cfg), "ENTER COMMAND:  B,J,K,L,R,S,P, or Help >");
+        assert_eq!(
+            sess.prompt(&cfg),
+            "ENTER COMMAND:  B,J,K,L,R,S,P, or Help >"
+        );
         let guest = BbsSession::new("W6ABC");
         assert_eq!(guest.prompt(&cfg), "ENTER COMMAND:  B,J,K,L,R,S, or Help >");
     }
@@ -1088,7 +1251,8 @@ mod tests {
 
     #[test]
     fn store_save_load_roundtrip_and_bak_recovery() {
-        let dir = std::env::temp_dir().join(format!("k2k_bbs_test_roundtrip_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("k2k_bbs_test_roundtrip_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         // Save twice — the .bak is written on the second save (Python parity)

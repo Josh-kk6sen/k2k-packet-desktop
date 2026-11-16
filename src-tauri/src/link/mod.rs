@@ -16,10 +16,9 @@
 use std::error::Error;
 
 pub mod agw;
-pub mod kiss;
 #[cfg(test)]
 pub mod fake;
-
+pub mod kiss;
 
 /// One inbound decoded unit the link hands to the engine.
 #[derive(Debug, Clone)]
@@ -89,14 +88,21 @@ mod protocol_agnostic_tests {
         // Simulate TX -> the wire -> RX by re-framing what the adapter would send.
         let mut tx = KissLink::new();
         tx.connect("h", 1).unwrap();
-        tx.send_frame(Outgoing { bytes: bytes.clone() }).unwrap();
+        tx.send_frame(Outgoing {
+            bytes: bytes.clone(),
+        })
+        .unwrap();
         kiss.feed(&tx.captured_tx());
         let kiss_decoded = kiss.drain();
 
         // AGW path
         let mut agw_src = AgwLink::new("KK6SEN", 0);
         agw_src.connect("h", 1).unwrap();
-        agw_src.send_frame(Outgoing { bytes: bytes.clone() }).unwrap();
+        agw_src
+            .send_frame(Outgoing {
+                bytes: bytes.clone(),
+            })
+            .unwrap();
         // AGW data frame: header(36) + payload. Parse out just the AX.25 bytes.
         let mut agw = AgwLink::new("KK6SEN", 0);
         agw.connect("h", 1).unwrap();
@@ -121,7 +127,6 @@ mod protocol_agnostic_tests {
         }
     }
 }
-
 
 /// The single transport contract that every radio link implements.
 pub trait Link: Send {

@@ -178,7 +178,9 @@ mod tests {
     fn raw_ax25() -> Vec<u8> {
         // A plausible minimal AX.25 frame (not necessarily valid, just bytes
         // that must survive KISS framing): dest + src + control.
-        vec![0x82, 0xA0, 0xE6, 0xAE, 0x92, 0x40, 0x40, 0x40, 0x60, 0x00, 0xF0, b'H', b'i']
+        vec![
+            0x82, 0xA0, 0xE6, 0xAE, 0x92, 0x40, 0x40, 0x40, 0x60, 0x00, 0xF0, b'H', b'i',
+        ]
     }
 
     #[test]
@@ -186,7 +188,10 @@ mod tests {
         let mut link = KissLink::new();
         link.connect("127.0.0.1", 8001).unwrap();
         let bytes = raw_ax25();
-        link.send_frame(Outgoing { bytes: bytes.clone() }).unwrap();
+        link.send_frame(Outgoing {
+            bytes: bytes.clone(),
+        })
+        .unwrap();
         // captured_tx holds FEND-wrapped, escaped bytes.
         assert!(!link.captured_tx.is_empty());
         assert_eq!(link.captured_tx[0], FEND);
@@ -235,7 +240,11 @@ mod tests {
     #[test]
     fn not_connected_rejects_send() {
         let mut link = KissLink::new();
-        let err = link.send_frame(Outgoing { bytes: vec![1, 2, 3] }).unwrap_err();
+        let err = link
+            .send_frame(Outgoing {
+                bytes: vec![1, 2, 3],
+            })
+            .unwrap_err();
         assert!(matches!(err, LinkError::NotConnected));
     }
 

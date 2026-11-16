@@ -71,10 +71,7 @@ impl Link for FakeLink {
     }
 
     fn drain(&mut self) -> Vec<Decoded> {
-        self.scripted_rx
-            .drain(..)
-            .map(Decoded::Incoming)
-            .collect()
+        self.scripted_rx.drain(..).map(Decoded::Incoming).collect()
     }
 
     fn close(&mut self) {

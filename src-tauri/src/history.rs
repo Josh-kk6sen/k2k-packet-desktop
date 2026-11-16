@@ -14,9 +14,7 @@ fn load_history_from_disk() -> HistoryStore {
         return HistoryStore::default();
     }
     match fs::read_to_string(&path) {
-        Ok(contents) => {
-            serde_json::from_str(&contents).unwrap_or_default()
-        }
+        Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
         Err(_) => HistoryStore::default(),
     }
 }

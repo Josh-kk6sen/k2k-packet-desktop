@@ -95,7 +95,9 @@ pub fn data_base(app: &AppHandle) -> PathBuf {
             }
         }
     }
-    app.path().app_local_data_dir().unwrap_or_else(|_| PathBuf::from("."))
+    app.path()
+        .app_local_data_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
 }
 
 /// Serialize `value` as pretty JSON and write it to `path`, creating the
@@ -118,8 +120,7 @@ pub fn write_json_file(
     // frame) can catch a half-written file and parse garbage — which
     // silently disabled the board. Rename is atomic on the same filesystem.
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, &contents)
-        .map_err(|e| format!("Failed to write {}: {}", what, e))?;
+    std::fs::write(&tmp, &contents).map_err(|e| format!("Failed to write {}: {}", what, e))?;
     if let Err(_e) = std::fs::rename(&tmp, path) {
         // Windows: rename over an existing file can fail — fall back to
         // remove+rename (the tiny non-atomic gap is better than a failure).

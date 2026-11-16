@@ -66,7 +66,9 @@ fn sim_up() -> bool {
 /// connect). Grab this at the top of every live test.
 fn live_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(|e| e.into_inner())
+    LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
 }
 
 // ── KISS frame reader/writer (what the app speaks over the wire) ───────────
@@ -84,7 +86,9 @@ impl SimLink {
         )
         .ok()?;
         stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
-        stream.set_write_timeout(Some(Duration::from_secs(2))).ok()?;
+        stream
+            .set_write_timeout(Some(Duration::from_secs(2)))
+            .ok()?;
         Some(Self {
             sock: stream,
             buf: Vec::new(),
@@ -205,7 +209,16 @@ fn live_bbs0_connect_receive_and_disconnect() {
     );
 
     // 3) Send "L\r" and confirm a message list comes back.
-    link.tx(&build_iframe("BBS0", 0, MY_CALL, MY_SSID, 0, nr, b"L\r", &[]));
+    link.tx(&build_iframe(
+        "BBS0",
+        0,
+        MY_CALL,
+        MY_SSID,
+        0,
+        nr,
+        b"L\r",
+        &[],
+    ));
     let mut got_list = false;
     let deadline = std::time::Instant::now() + Duration::from_secs(6);
     while std::time::Instant::now() < deadline {
@@ -224,7 +237,17 @@ fn live_bbs0_connect_receive_and_disconnect() {
     assert!(got_list, "BBS0 did not return a message list to 'L'");
 
     // 4) DISC teardown; expect UA or DM back.
-    link.tx(&build_ax25_frame("BBS0", 0, MY_CALL, MY_SSID, 0x53, 0xF0, &[], &[], true));
+    link.tx(&build_ax25_frame(
+        "BBS0",
+        0,
+        MY_CALL,
+        MY_SSID,
+        0x53,
+        0xF0,
+        &[],
+        &[],
+        true,
+    ));
     let mut got_ack = false;
     let deadline = std::time::Instant::now() + Duration::from_secs(4);
     while std::time::Instant::now() < deadline {
@@ -254,7 +277,16 @@ fn live_unconnected_gets_dm() {
         }
     };
     // Send an I-frame without first SABM-ing → sim should reject with DM.
-    link.tx(&build_iframe("BBS0", 0, MY_CALL, MY_SSID, 0, 0, b"hi\r", &[]));
+    link.tx(&build_iframe(
+        "BBS0",
+        0,
+        MY_CALL,
+        MY_SSID,
+        0,
+        0,
+        b"hi\r",
+        &[],
+    ));
     let mut got_dm = false;
     let deadline = std::time::Instant::now() + Duration::from_secs(4);
     while std::time::Instant::now() < deadline {
@@ -314,7 +346,10 @@ fn live_never_responds_stays_silent() {
     };
     link.tx(&build_sabm("NODE-D", 7, MY_CALL, MY_SSID, &[]));
     let frames = link.collect_frames(Duration::from_secs(2));
-    assert!(frames.is_empty(), "NODE-D (never_responds) should send nothing");
+    assert!(
+        frames.is_empty(),
+        "NODE-D (never_responds) should send nothing"
+    );
     eprintln!("[k2k-live] NODE-D (never_responds) silence: OK");
 }
 
@@ -331,7 +366,13 @@ fn live_digipeater_path_carries_back() {
         }
     };
     // NODE-B is only reachable via RELAY digipeater.
-    link.tx(&build_sabm("NODE-B", 5, MY_CALL, MY_SSID, &["RELAY".to_string()]));
+    link.tx(&build_sabm(
+        "NODE-B",
+        5,
+        MY_CALL,
+        MY_SSID,
+        &["RELAY".to_string()],
+    ));
     let mut saw_ua = false;
     let mut framed_ok = false;
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
@@ -348,7 +389,10 @@ fn live_digipeater_path_carries_back() {
         }
     }
     assert!(saw_ua, "NODE-B via RELAY did not respond");
-    assert!(framed_ok, "digipeater response should carry the via path back");
+    assert!(
+        framed_ok,
+        "digipeater response should carry the via path back"
+    );
     eprintln!("[k2k-live] NODE-B via RELAY (path carried back): OK");
 }
 
@@ -380,10 +424,7 @@ fn live_multicast_ui_reaches_all_clients() {
     let mut hit2 = false;
     let deadline = std::time::Instant::now() + Duration::from_secs(4);
     while std::time::Instant::now() < deadline {
-        for (lab, link, hit) in [
-            ("c1", &mut c1, &mut hit1),
-            ("c2", &mut c2, &mut hit2),
-        ] {
+        for (lab, link, hit) in [("c1", &mut c1, &mut hit1), ("c2", &mut c2, &mut hit2)] {
             if let Some(f) = link.rx() {
                 if let Some(p) = parse_ax25_frame(&f) {
                     if String::from_utf8_lossy(&p.info).contains("regression multicast ping") {
@@ -394,7 +435,10 @@ fn live_multicast_ui_reaches_all_clients() {
             }
         }
     }
-    assert!(hit1 && hit2, "both clients should receive the multicast UI frame");
+    assert!(
+        hit1 && hit2,
+        "both clients should receive the multicast UI frame"
+    );
     eprintln!("[k2k-live] multicast UI to 2 clients: OK");
 }
 
@@ -452,7 +496,10 @@ fn live_replay_load_and_step() {
         &format!("{{\"action\":\"load\",\"path\":\"{path}\"}}"),
     );
     let lresp = load.unwrap_or_default();
-    assert!(lresp.contains("\"ok\": true"), "replay load failed: {lresp}");
+    assert!(
+        lresp.contains("\"ok\": true"),
+        "replay load failed: {lresp}"
+    );
 
     let step = panel_post("/api/replay", "{\"action\":\"step\"}");
     assert!(panel_ok(step), "replay step failed");

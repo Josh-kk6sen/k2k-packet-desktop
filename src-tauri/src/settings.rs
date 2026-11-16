@@ -30,7 +30,7 @@ pub struct UnprotoThemeColors {
     pub via: Option<String>,
     pub meta: Option<String>,
     pub payload: Option<String>,
-    pub connrx: Option<String>,   // connected-mode received payload text (--msg-rx)
+    pub connrx: Option<String>, // connected-mode received payload text (--msg-rx)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,14 +43,14 @@ pub struct AppSettings {
     pub auto_connect: bool,
     pub beacon_enabled: bool,
     pub beacon: String,
-    pub beacon_interval: u32,                // minutes, 0 = disabled
-    pub beacon_dest: String,                 // destination callsign for beacon
-    pub beacon_via: String,                  // digipeater path for beacon
-    pub font_size: u32,                      // UI font size in px (legacy)
-    pub mon_font_size: u32,                  // Monitor font size in px (legacy)
-    pub app_font_size: u32,                  // App base font size in px (10-25)
-    pub conn_font_size: i32,                 // Connected mode OFFSET (-5..+5) from app base
-    pub unproto_font_size: i32,              // Unproto OFFSET (-5..+5) from app base
+    pub beacon_interval: u32,   // minutes, 0 = disabled
+    pub beacon_dest: String,    // destination callsign for beacon
+    pub beacon_via: String,     // digipeater path for beacon
+    pub font_size: u32,         // UI font size in px (legacy)
+    pub mon_font_size: u32,     // Monitor font size in px (legacy)
+    pub app_font_size: u32,     // App base font size in px (10-25)
+    pub conn_font_size: i32,    // Connected mode OFFSET (-5..+5) from app base
+    pub unproto_font_size: i32, // Unproto OFFSET (-5..+5) from app base
     pub raw_kiss_display: bool,
     pub debug_tx_enabled: bool,
     pub deduplicate_packets: bool,
@@ -58,38 +58,38 @@ pub struct AppSettings {
     pub only_unproto: bool,
     pub hide_via: bool,
     pub unproto_ignored_destinations: String,
-    pub unproto_to: String,                   // last unproto To: (persisted, not in settings UI)
-    pub unproto_via: String,                  // last unproto Via: (persisted, not in settings UI)
+    pub unproto_to: String, // last unproto To: (persisted, not in settings UI)
+    pub unproto_via: String, // last unproto Via: (persisted, not in settings UI)
     pub window_width: Option<u32>,
     pub window_height: Option<u32>,
     pub window_x: Option<i32>,
     pub window_y: Option<i32>,
     pub window_maximized: Option<bool>,
-    pub theme: String,                      // "dark", "light", "blue", "sepia", "synthwave", or "vintage"
+    pub theme: String, // "dark", "light", "blue", "sepia", "synthwave", or "vintage"
     // ── Per-theme unproto font colors (None / absent = theme built-in) ──
     pub unproto_colors: Option<HashMap<String, UnprotoThemeColors>>,
     // ── KISS TNC Parameters (only used when protocol is Kiss) ──
-    pub kiss_p: u32,                         // Persistence: 0–255 (63 = p≈0.25)
-    pub kiss_slot_time: u32,                 // Slot interval in 10ms units (10 = 100ms)
-    pub kiss_txdelay: u32,                   // TX keyup delay in 10ms units (30 = 300ms)
+    pub kiss_p: u32,         // Persistence: 0–255 (63 = p≈0.25)
+    pub kiss_slot_time: u32, // Slot interval in 10ms units (10 = 100ms)
+    pub kiss_txdelay: u32,   // TX keyup delay in 10ms units (30 = 300ms)
     // ── AX.25 Link Layer Timers ──
-    pub kiss_t1_ms: u32,                     // Retransmission timeout in ms (default 10s)
-    pub kiss_t2_ms: u32,                     // ACK batching delay in ms (default 1s)
-    pub kiss_t3_ms: u32,                     // Inactivity keep-alive in ms (default 5min)
-    pub kiss_ka_check_ms: u32,              // Keep-alive check interval in ms (default 1min)
-    pub kiss_n2_max: u32,                    // Max retransmissions before disconnect (default 5)
+    pub kiss_t1_ms: u32,       // Retransmission timeout in ms (default 10s)
+    pub kiss_t2_ms: u32,       // ACK batching delay in ms (default 1s)
+    pub kiss_t3_ms: u32,       // Inactivity keep-alive in ms (default 5min)
+    pub kiss_ka_check_ms: u32, // Keep-alive check interval in ms (default 1min)
+    pub kiss_n2_max: u32,      // Max retransmissions before disconnect (default 5)
     // ── Message Board (PBBS) ──
-    pub message_board_enabled: bool,         // Listen for connects to the board callsign
-    pub message_board_callsign: String,      // Callsign others connect to (defaults to the user's)
-    pub message_board_ssid: u8,              // SSID of the board callsign (default 1 → KK6SEN-1)
-    pub message_board_sysops: String,        // Comma-separated callsigns with Delete/Pin rights
-    pub message_board_privacy: bool,         // Users see only their own + public mail
+    pub message_board_enabled: bool, // Listen for connects to the board callsign
+    pub message_board_callsign: String, // Callsign others connect to (defaults to the user's)
+    pub message_board_ssid: u8,      // SSID of the board callsign (default 1 → KK6SEN-1)
+    pub message_board_sysops: String, // Comma-separated callsigns with Delete/Pin rights
+    pub message_board_privacy: bool, // Users see only their own + public mail
     pub message_board_public_aliases: String, // Comma-separated public groups (ALL by default)
-    pub message_board_max_packet_size: u32,  // Max info bytes per board output frame (default 250; 32–256)
+    pub message_board_max_packet_size: u32, // Max info bytes per board output frame (default 250; 32–256)
     // ── Sounds (direct-chat alerts) ──
-    pub sound_connect: String,               // sound played when a station connects to us ("none" | ding | double | chime | beep | chirp)
-    pub sound_bell: String,                  // sound played on a remote :BELL / :RING
-    pub sound_volume: u32,                   // 0–100
+    pub sound_connect: String, // sound played when a station connects to us ("none" | ding | double | chime | beep | chirp)
+    pub sound_bell: String,    // sound played on a remote :BELL / :RING
+    pub sound_volume: u32,     // 0–100
 }
 
 impl Default for AppSettings {
@@ -126,14 +126,14 @@ impl Default for AppSettings {
             window_maximized: None,
             theme: "dark".to_string(),
             unproto_colors: None,
-            kiss_p: 63,              // p≈0.25 — conservative for shared channels
-            kiss_slot_time: 10,      // 100ms — responsive without being aggressive
-            kiss_txdelay: 30,        // 300ms — safe for most TNCs
-            kiss_t1_ms: 10_000,      // 10s — allows digipeater round-trip time
-            kiss_t2_ms: 1_000,       // 1s — standard ACK batching delay
-            kiss_t3_ms: 300_000,     // 5min — inactivity keep-alive timeout
-            kiss_ka_check_ms: 60_000,// 1min — keep-alive check interval
-            kiss_n2_max: 5,          // 5 retries before forced disconnect
+            kiss_p: 63,               // p≈0.25 — conservative for shared channels
+            kiss_slot_time: 10,       // 100ms — responsive without being aggressive
+            kiss_txdelay: 30,         // 300ms — safe for most TNCs
+            kiss_t1_ms: 10_000,       // 10s — allows digipeater round-trip time
+            kiss_t2_ms: 1_000,        // 1s — standard ACK batching delay
+            kiss_t3_ms: 300_000,      // 5min — inactivity keep-alive timeout
+            kiss_ka_check_ms: 60_000, // 1min — keep-alive check interval
+            kiss_n2_max: 5,           // 5 retries before forced disconnect
             message_board_enabled: false,
             message_board_callsign: String::new(),
             message_board_ssid: 1,
@@ -155,11 +155,11 @@ impl Default for AppSettings {
 /// fire RR enquiries back-to-back. The UI already bounds its inputs, so this
 /// is the load-time safety net, same role as the font clamps.
 fn clamp_ax25_timers(s: &mut AppSettings) {
-    s.kiss_t1_ms = s.kiss_t1_ms.clamp(100, 120_000);              // 100ms..2min
-    s.kiss_t2_ms = s.kiss_t2_ms.clamp(100, 10_000);               // 100ms..10s
-    s.kiss_t3_ms = s.kiss_t3_ms.clamp(5_000, 3_600_000);          // 5s..1h
+    s.kiss_t1_ms = s.kiss_t1_ms.clamp(100, 120_000); // 100ms..2min
+    s.kiss_t2_ms = s.kiss_t2_ms.clamp(100, 10_000); // 100ms..10s
+    s.kiss_t3_ms = s.kiss_t3_ms.clamp(5_000, 3_600_000); // 5s..1h
     s.kiss_ka_check_ms = s.kiss_ka_check_ms.clamp(1_000, 600_000); // 1s..10min
-    s.kiss_n2_max = s.kiss_n2_max.clamp(1, 50);                   // 1..50 retries
+    s.kiss_n2_max = s.kiss_n2_max.clamp(1, 50); // 1..50 retries
 }
 
 /// A beacon interval of 0 (empty field in the UI, or a hand-edited file)
@@ -240,7 +240,9 @@ fn load_settings_from_path(path: &std::path::Path) -> Result<Option<AppSettings>
     let tmp = path.with_extension("json.tmp");
     let bak = PathBuf::from(format!("{}.bak", path.display()));
     for (label, cand) in [("tmp", &tmp), ("bak", &bak)] {
-        let Ok(Some(s)) = parse_settings_file(cand) else { continue };
+        let Ok(Some(s)) = parse_settings_file(cand) else {
+            continue;
+        };
         crate::append_log(
             "settings",
             &format!(
@@ -342,9 +344,8 @@ fn sanitize_message_board(s: &mut AppSettings) {
     // AX.25 callsigns are 1–6 alphanumeric. Anything else (trailing dash,
     // >6 chars, punctuation) can never match a decoded dest — the board
     // would silently never answer. Drop it and log instead of running dead.
-    let valid = !call.is_empty()
-        && call.len() <= 6
-        && call.chars().all(|c| c.is_ascii_alphanumeric());
+    let valid =
+        !call.is_empty() && call.len() <= 6 && call.chars().all(|c| c.is_ascii_alphanumeric());
     if !valid {
         if !call.is_empty() {
             crate::commands::log_line(&format!(
@@ -360,7 +361,8 @@ fn sanitize_message_board(s: &mut AppSettings) {
     // separate link-layer field) — fold any "CALL-N" entries so a sysop
     // list ported from a Python config with SSIDs doesn't silently never
     // match.
-    s.message_board_sysops = s.message_board_sysops
+    s.message_board_sysops = s
+        .message_board_sysops
         .split(',')
         .map(|c| {
             let t = c.trim().to_uppercase();
@@ -457,10 +459,7 @@ pub fn geometry_visible_on(x: i32, y: i32, monitors: &[(i32, i32, u32, u32)]) ->
     const NEED_W: i32 = 120;
     const NEED_H: i32 = 80;
     monitors.iter().any(|&(mx, my, mw, mh)| {
-        x + NEED_W > mx
-            && x < mx + mw as i32
-            && y + NEED_H > my
-            && y < my + mh as i32
+        x + NEED_W > mx && x < mx + mw as i32 && y + NEED_H > my && y < my + mh as i32
     })
 }
 
@@ -483,8 +482,12 @@ fn monitor_rects(window: &tauri::WebviewWindow) -> Vec<(i32, i32, u32, u32)> {
 /// (desktop only — a headless build has no window to place).
 #[cfg(feature = "desktop")]
 pub fn restore_window_state(app: &AppHandle) -> Result<(), String> {
-    let Ok(Some(settings)) = load_settings_from_disk() else { return Ok(()); };
-    let Some(window) = app.get_webview_window("main") else { return Ok(()); };
+    let Ok(Some(settings)) = load_settings_from_disk() else {
+        return Ok(());
+    };
+    let Some(window) = app.get_webview_window("main") else {
+        return Ok(());
+    };
     // Only restore a size that could actually be a window. Anything else
     // (0x0, 3x2 …) is treated as "never saved" and the builder's default
     // 920x680 stands.
@@ -534,7 +537,14 @@ fn valid_hex(s: &str) -> bool {
 pub fn sanitize_unproto_colors(colors: &mut Option<HashMap<String, UnprotoThemeColors>>) {
     let Some(map) = colors.as_mut() else { return };
     for c in map.values_mut() {
-        for slot in [&mut c.time, &mut c.call, &mut c.via, &mut c.meta, &mut c.payload, &mut c.connrx] {
+        for slot in [
+            &mut c.time,
+            &mut c.call,
+            &mut c.via,
+            &mut c.meta,
+            &mut c.payload,
+            &mut c.connrx,
+        ] {
             if let Some(v) = slot {
                 if valid_hex(v) {
                     *slot = Some(v.to_uppercase());
@@ -650,8 +660,14 @@ mod tests {
 
         // Serialize as save_settings_to_disk does
         let json = serde_json::to_string_pretty(&s).expect("serialize");
-        assert!(json.contains("\"unprotoTo\": \"W6ABC\""), "json missing unprotoTo:\n{json}");
-        assert!(json.contains("\"unprotoVia\": \"KBANN\""), "json missing unprotoVia:\n{json}");
+        assert!(
+            json.contains("\"unprotoTo\": \"W6ABC\""),
+            "json missing unprotoTo:\n{json}"
+        );
+        assert!(
+            json.contains("\"unprotoVia\": \"KBANN\""),
+            "json missing unprotoVia:\n{json}"
+        );
 
         // Deserialize as load_settings_from_disk does
         let back: AppSettings = serde_json::from_str(&json).expect("deserialize");
@@ -728,7 +744,10 @@ mod tests {
             },
         )]));
         let json = serde_json::to_string(&s).unwrap();
-        assert!(json.contains("\"unprotoColors\""), "missing camelCase key:\n{json}");
+        assert!(
+            json.contains("\"unprotoColors\""),
+            "missing camelCase key:\n{json}"
+        );
 
         let back: AppSettings = serde_json::from_str(&json).unwrap();
         let dark = &back.unproto_colors.as_ref().unwrap()["dark"];
@@ -746,7 +765,10 @@ mod tests {
         bad.unproto_colors = Some(HashMap::from([
             (
                 "purple".to_string(),
-                UnprotoThemeColors { time: Some("#12".into()), ..Default::default() },
+                UnprotoThemeColors {
+                    time: Some("#12".into()),
+                    ..Default::default()
+                },
             ),
             (
                 "dark".to_string(),
@@ -760,7 +782,10 @@ mod tests {
         sanitize_unproto_colors(&mut bad.unproto_colors);
         let map = bad.unproto_colors.unwrap();
         assert_eq!(map.len(), 1, "unknown theme must be dropped");
-        assert!(map["dark"].payload.is_none(), "malformed hex must be dropped");
+        assert!(
+            map["dark"].payload.is_none(),
+            "malformed hex must be dropped"
+        );
         assert_eq!(map["dark"].via.as_deref(), Some("#008888"));
     }
 
@@ -823,7 +848,11 @@ mod tests {
         assert!(s.kiss_t1_ms >= 100, "t1 below floor: {}", s.kiss_t1_ms);
         assert!(s.kiss_t2_ms >= 100, "t2 below floor: {}", s.kiss_t2_ms);
         assert!(s.kiss_t3_ms >= 5_000, "t3 below floor: {}", s.kiss_t3_ms);
-        assert!(s.kiss_ka_check_ms >= 1_000, "ka_check below floor: {}", s.kiss_ka_check_ms);
+        assert!(
+            s.kiss_ka_check_ms >= 1_000,
+            "ka_check below floor: {}",
+            s.kiss_ka_check_ms
+        );
         assert!(s.kiss_n2_max >= 1, "n2 below floor: {}", s.kiss_n2_max);
 
         // Explicit zeros (hand-edited file / old build) → raised to floors
@@ -868,8 +897,8 @@ mod tests {
     fn beacon_interval_zero_defaults_to_one() {
         // A missing key already deserializes to the field default (240);
         // only an explicit 0 in the file needs raising.
-        let mut s: AppSettings = serde_json::from_str(r#"{"callsign":"KK6SEN","beaconInterval":0}"#)
-            .unwrap();
+        let mut s: AppSettings =
+            serde_json::from_str(r#"{"callsign":"KK6SEN","beaconInterval":0}"#).unwrap();
         assert_eq!(s.beacon_interval, 0, "explicit 0 must deserialize as-is");
         clamp_beacon_interval(&mut s);
         assert_eq!(s.beacon_interval, 1);
@@ -990,7 +1019,10 @@ mod tests {
         std::fs::write(&path, "garbage").expect("corrupt main");
         save_settings_to_path(&path, &s).expect("save #3 over corrupt main");
         let bak_txt = std::fs::read_to_string(&bak).expect("read bak again");
-        assert!(bak_txt.contains("KK6SEN"), "corrupt main must not clobber good bak");
+        assert!(
+            bak_txt.contains("KK6SEN"),
+            "corrupt main must not clobber good bak"
+        );
         cleanup(&path);
     }
 }
