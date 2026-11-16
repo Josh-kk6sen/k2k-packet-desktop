@@ -68,8 +68,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Pinned to 1.99.0: Rust 1.100.0 breaks the Tauri build script for the
+      # MinGW target ("No such file or directory" right after resource.lib).
+      # Verified on the same commit — 1.99.0 builds clean, 1.100.0 fails.
+      # Unpin once Tauri ships a fix.
       - name: Rust toolchain
-        run: rustup update stable && rustup default stable
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal --target x86_64-pc-windows-gnu
+          rustup default 1.99.0
 
       - name: Install MinGW cross toolchain (diagnostic)
         run: |
