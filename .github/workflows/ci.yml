@@ -92,3 +92,38 @@ jobs:
         env:
           CARGO_TARGET_DIR: /tmp/k2k-windows-target
         run: cargo check --target x86_64-pc-windows-gnu
+
+  lint:
+    name: Clippy + dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Rust toolchain
+        run: rustup update stable && rustup default stable && rustup component add clippy
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl wget file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            pkg-config
+
+      # Fails on clippy errors. Warnings are reported but not fatal: the tree
+      # currently carries ~109 of them. Flip to `-- -D warnings` once that
+      # backlog is cleared.
+      - name: cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --message-format short
+
+      - name: cargo deny (advisories, licenses, bans)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: src-tauri/Cargo.toml
+          command: check advisories licenses bans

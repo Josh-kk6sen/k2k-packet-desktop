@@ -1,0 +1,61 @@
+# cargo-deny configuration — K2K Packet Desktop
+# Run: cargo deny check advisories licenses bans
+# Docs: https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+version = 2
+# Yanked crates are a warning, not a build failure: a yanked transitive dep is
+# usually still fine and blocking CI on it just gets the check disabled.
+yanked = "warn"
+# Baseline of known advisories in transitive dependencies, all inherited from
+# tauri / tauri-plugin-single-instance. CI fails on anything NOT in this list,
+# so a new advisory still breaks the build. Re-audit when Tauri bumps.
+ignore = [
+    "RUSTSEC-2024-0370",  # proc-macro-error unmaintained
+    "RUSTSEC-2025-0075",  # unic-char-range unmaintained
+    "RUSTSEC-2025-0080",  # unic-common unmaintained
+    "RUSTSEC-2025-0081",  # unic-char-property unmaintained
+    "RUSTSEC-2025-0098",  # unic-ucd-version unmaintained
+    "RUSTSEC-2025-0100",  # unic-ucd-ident unmaintained
+    "RUSTSEC-2026-0194",  # quick-xml: quadratic duplicate-attribute check (DoS)
+    "RUSTSEC-2026-0195",  # quick-xml: unbounded namespace allocation (DoS)
+    "RUSTSEC-2026-0370",  # zvariant unmaintained
+    "RUSTSEC-2026-0371",  # zbus_names unmaintained
+    "RUSTSEC-2026-0372",  # zvariant_derive unmaintained
+    "RUSTSEC-2026-0386",  # async-io: AsyncFd I/O-safety unsoundness
+]
+
+[licenses]
+version = 2
+# Permissive + weak-copyleft licenses only. Anything else needs a deliberate
+# decision, not a silent pass.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "MPL-2.0",
+    "CC0-1.0",
+    "Unlicense",
+    "BSL-1.0",
+    "OpenSSL",
+    "CDLA-Permissive-2.0",
+    "GPL-3.0-only",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
