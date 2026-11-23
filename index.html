@@ -493,6 +493,9 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .u-header .h-via.clickable{cursor:pointer}
 .u-header .h-via.clickable:hover{text-decoration:underline}
 .u-header .h-meta{color:var(--u-meta)}
+/* Zeroed address field on air (invalid AX.25): show Direwolf's ?????? marker in
+   red instead of a blank cell. */
+.u-header .h-missing{color:var(--red);font-weight:700}
 
 /* Payload continuation lines — no wrap, horizontal scroll for long lines. */
 .u-payload{color:var(--u-payload);padding:0 12px;white-space:pre;font-size:var(--unproto-font-size);line-height:1.5}
@@ -713,7 +716,13 @@ if(!window.__TAURI_INTERNALS__ && /[?&]preview\b/.test(location.search)){
        ["N4TEST-10","APRS","","!0000.00N/00000.00W- demo packet"],
        ["N0CALL","BEACON","DIGI1,DIGI2,DIGI3,DIGI4",beacon],
        ["N0CALL","BEACON","DIGI1*,DIGI2,DIGI3,DIGI4",beacon],
-       ["N0CALL","BEACON","DIGI1*,DIGI2*,DIGI3*,DIGI4",beacon]]
+       ["N0CALL","BEACON","DIGI1*,DIGI2*,DIGI3*,DIGI4",beacon],
+       // Frame with a zeroed address field on air (seen from a node whose
+       // MYCALL is blank): no source, then no destination. Both must keep
+       // their normal per-token colours and show ?????? — never one green blob.
+       // No info field either: these are RR/control frames, nothing to display.
+       ["","K6BER-5","", ""],
+       ["K6BER-5","","", ""]]
       .forEach(function(r,i){
         setTimeout(function(){
           _emit("unproto-frame",{source:r[0],dest:r[1],info:r[3],frame_type:"UI-",radio_header:_hdr(r[0],r[1],r[2]),raw_kiss_data:"",sent:false});

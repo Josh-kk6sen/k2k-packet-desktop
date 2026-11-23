@@ -539,6 +539,61 @@ function dedupViaText(entry) {
   return entry.dedupVia.map((c) => c.call + (c.star ? "*" : "")).join(",");
 }
 
+// ── Unproto header rendering ───────────────────────────────────────────
+// A frame can arrive with a zeroed address field (six NUL bytes instead of a
+// callsign) — a real on-air condition, not a decode error: Direwolf flags it
+// as "Station address ... is empty!  This is not a valid AX.25 frame." The
+// backend faithfully sends src/dst as "" for those.
+const MISSING_CALL = "??????";
+
+// Callsign cell: escaped text, or Direwolf's own "??????" placeholder when the
+// frame carried no callsign there. The nested span is what marks it as invalid
+// (see `.u-header .h-missing`), so a blank never looks like a broken column.
+function callHtml(call) {
+  const s = String(call == null ? "" : call).trim();
+  if (s) return esc(s);
+  return `<span class="h-missing" title="No callsign in this address field — the sender transmitted a zeroed address (invalid AX.25 frame)">${MISSING_CALL}</span>`;
+}
+
+// Build the detailed header from the STRUCTURED fields, never by re-splitting
+// the pre-formatted radio header with one regex. That regex had two failure
+// modes once a field was empty: with no destination the lazy group swallowed
+// "ctl" and displayed it as the destination callsign; with no source it failed
+// to match at all, leaving the whole line as one bare text node inside
+// .u-header — so it took .u-header's callsign colour and every per-token colour
+// (yellow time, dim meta) was lost. Here the address segment is stripped by
+// exact length (we know src/dst), and only the "via ... ctl ..." tail is text.
+function unprotoHeaderHtml(entry) {
+  // "radio: fm <src> to <dst> [via ...] ctl ..." → "<src> to <dst> [via ...] ctl ..."
+  // (the \s+ after `fm` also absorbs the doubled space when the source is empty)
+  const body = String(entry.radioHeader || "").replace(/^radio:\s*/i, "").replace(/^fm\s+/i, "").trimEnd();
+  const segParts = [];
+  if (entry.src) segParts.push(entry.src);
+  segParts.push("to");
+  if (entry.dst) segParts.push(entry.dst);
+  const seg = segParts.join(" ");
+  const tail = body.startsWith(seg) ? body.slice(seg.length) : "";
+  // Split the tail at the "ctl" token: everything before it is the digi path,
+  // everything from it on is the control/length metadata.
+  let viaTxt = "";
+  let meta = tail.trim();
+  const m = /(^|\s)ctl(\s|$)/i.exec(tail);
+  if (m) {
+    viaTxt = tail.slice(0, m.index);
+    meta = tail.slice(m.index).trim();
+  }
+  const viaHtml = settings.hideVia || !viaTxt.trim() ? "" : viaSpan(displayVia(entry, viaTxt), " via ");
+  const metaHtml = meta ? `<span class="h-meta">${esc(meta)}</span>` : "";
+  return (
+    `<span class="h-time">${esc(entry.ts)}</span> ` +
+    `<span class="h-src">${callHtml(entry.src)}</span> ` +
+    `<span class="h-to">to</span> ` +
+    `<span class="h-dst">${callHtml(entry.dst)}</span>` +
+    viaHtml +
+    (metaHtml ? " " + metaHtml : "")
+  );
+}
+
 function renderUnproto() {
   unprotoData.innerHTML = "";
   unprotoCount = 0;
@@ -581,13 +636,12 @@ function renderUnproto() {
         // is on). Clicking loads exactly what is displayed.
         let uv = '<span class="h-via"></span>';
         if (!settings.hideVia && hdr) uv = viaSpan(displayVia(entry, hdr), " via ");
-        out += `<div class="u-header"><span class="h-time">${esc(entry.ts)}</span> <span class="h-src">${esc(entry.src)}</span> to <span class="h-dst">${esc(entry.dst || "")}</span>${uv}</div>`;
+        out += `<div class="u-header"><span class="h-time">${esc(entry.ts)}</span> <span class="h-src">${callHtml(entry.src)}</span> to <span class="h-dst">${callHtml(entry.dst)}</span>${uv}</div>`;
       } else {
-        const q = hdr.replace(/^radio:\s*(?:fm\s+)?/, entry.ts + " ").replace(/^(\d{2}:\d{2}:\d{2})\s+(\S+)\s+to\s+(\S+?)(?:\s+(via\s+\S+(?:\s+\S+)*?(?=\s+ctl\s|\s+len\s|$)))?\s+(.*)$/, (m, t, s, d, v, rest) => `<span class="h-time">${esc(t)}</span> <span class="h-src">${esc(s)}</span> <span class="h-to">to</span> <span class="h-dst">${esc(d)}</span> ${settings.hideVia ? "" : viaSpan(displayVia(entry, v || ""), " via ")} <span class="h-meta">${esc(rest)}</span>`);
-        out += `<div class="u-header">${q}</div>`;
+        out += `<div class="u-header">${unprotoHeaderHtml(entry)}</div>`;
       }
     } else {
-      out += `<div class="u-header"><span class="h-time">${esc(entry.ts)}</span> <span class="h-src">${esc(entry.src)}</span> <span class="h-meta">${esc(entry.dst || "")} ${esc(ft)}</span></div>`;
+      out += `<div class="u-header"><span class="h-time">${esc(entry.ts)}</span> <span class="h-src">${callHtml(entry.src)}</span> <span class="h-meta">${callHtml(entry.dst)} ${esc(ft)}</span></div>`;
     }
     const ctrlFrames = ["SABM+", "SABM-", "UA+", "UA-", "DISC+", "DISC-", "DM+", "DM-", "FRMR+", "FRMR-", "SABME+", "SABME-", "RR", "RNR", "REJ", "SREJ", "XID+", "XID-"];
     const lines = entry.payload.split(/[\r\n]+/).filter((l) => l.length > 0);
