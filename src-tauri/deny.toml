@@ -23,6 +23,7 @@ ignore = [
     "RUSTSEC-2026-0371",  # zbus_names unmaintained
     "RUSTSEC-2026-0372",  # zvariant_derive unmaintained
     "RUSTSEC-2026-0386",  # async-io: AsyncFd I/O-safety unsoundness
+    "RUSTSEC-2026-0543",  # chrono unmaintained (log timestamps; migrate to jiff separately)
 ]
 
 [licenses]
